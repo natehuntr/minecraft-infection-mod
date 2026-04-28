@@ -8,7 +8,10 @@
   "contact": { "sources": "https://github.com/natehuntr/minecraft-infection-mod" },
   "license": "MIT",
   "environment": "*",
-  "entrypoints": { "main": ["com.natehuntr.infectionmod.InfectionMod"] },
+  "entrypoints": {
+    "main": ["com.natehuntr.infectionmod.InfectionMod"],
+    "client": ["com.natehuntr.infectionmod.client.InfectionModClient"]
+  },
   "mixins": ["infection_mod.mixins.json"],
   "depends": {
     "fabricloader": ">=0.16.0",
