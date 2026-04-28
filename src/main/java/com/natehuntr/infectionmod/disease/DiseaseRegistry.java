@@ -11,7 +11,7 @@ public final class DiseaseRegistry {
             0.30f, 0.5f, 1200, 12000, 0.80f, -1
     ));
 
-              seaseRegistry() {}
+    private DiseaseRegistry() {}
 
     private static Disease register(Disease disease) {
         REGISTRY.put(disease.id(), disease);
