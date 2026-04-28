@@ -11,7 +11,11 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWoimport net.minecraft.server.world.ServerWoimport net.mintil.*;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Identifier;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public final class InfectionManager {
     private static final double PROXIMITY_RADIUS = 3.0;
