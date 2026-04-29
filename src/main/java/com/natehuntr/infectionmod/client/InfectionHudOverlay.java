@@ -1,7 +1,8 @@
 package com.natehuntr.infectionmod.client;
 
 import com.natehuntr.infectionmod.disease.Disease;
-import com.natehuntr.infectionmod.dimport com.natehuntr.infectionmod.dimport com.naEnvType;
+import com.natehuntr.infectionmod.disease.DiseaseRegistry;
+import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
