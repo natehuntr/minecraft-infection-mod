@@ -16,6 +16,7 @@ public class InfectionModClient implements ClientModInitializer {
                 InfectionHudOverlay.infected = payload.infected();
                 InfectionHudOverlay.diseaseId = payload.diseaseId();
                 InfectionHudOverlay.ticksRemaining = payload.ticksRemaining();
+                InfectionHudOverlay.permanentHeartsLost = payload.permanentHeartsLost();
             })
         );
         HudRenderCallback.EVENT.register(InfectionHudOverlay::render);

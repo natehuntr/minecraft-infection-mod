@@ -1,3 +1,115 @@
+import os
+
+base = os.path.dirname(os.path.abspath(__file__))
+src = os.path.join(base, "src/main/java/com/natehuntr/infectionmod")
+
+files = {}
+
+files["network/InfectionSyncPayload.java"] = """\
+package com.natehuntr.infectionmod.network;
+
+import com.natehuntr.infectionmod.InfectionMod;
+import net.minecraft.network.PacketByteBuf;
+import net.minecraft.network.codec.PacketCodec;
+import net.minecraft.network.packet.CustomPayload;
+import net.minecraft.util.Identifier;
+
+public record InfectionSyncPayload(boolean infected, String diseaseId, int ticksRemaining, int permanentHeartsLost)
+        implements CustomPayload {
+    public static final CustomPayload.Id<InfectionSyncPayload> ID =
+        new CustomPayload.Id<>(Identifier.of(InfectionMod.MOD_ID, "infection_sync"));
+    public static final PacketCodec<PacketByteBuf, InfectionSyncPayload> CODEC = PacketCodec.of(
+        (payload, buf) -> { buf.writeBoolean(payload.infected()); buf.writeString(payload.diseaseId()); buf.writeVarInt(payload.ticksRemaining()); buf.writeVarInt(payload.permanentHeartsLost()); },
+        buf -> new InfectionSyncPayload(buf.readBoolean(), buf.readString(), buf.readVarInt(), buf.readVarInt())
+    );
+    @Override public CustomPayload.Id<? extends CustomPayload> getId() { return ID; }
+}
+"""
+
+files["client/InfectionHudOverlay.java"] = """\
+package com.natehuntr.infectionmod.client;
+
+import com.natehuntr.infectionmod.disease.Disease;
+import com.natehuntr.infectionmod.disease.DiseaseRegistry;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
+
+@Environment(EnvType.CLIENT)
+public final class InfectionHudOverlay {
+    public static volatile boolean infected = false;
+    public static volatile String diseaseId = "";
+    public static volatile int ticksRemaining = 0;
+    public static volatile int permanentHeartsLost = 0;
+
+    private static final Identifier HEART_CONTAINER = Identifier.ofVanilla("hud/heart/container");
+
+    private InfectionHudOverlay() {}
+
+    public static void render(DrawContext context, RenderTickCounter tickCounter) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.options.hudHidden) return;
+
+        if (permanentHeartsLost > 0) {
+            int baseX = context.getScaledWindowWidth() / 2 - 91;
+            int heartY = context.getScaledWindowHeight() - 39;
+            int firstGreySlot = 10 - permanentHeartsLost;
+            for (int i = 0; i < permanentHeartsLost; i++) {
+                context.drawGuiTexture(
+                    RenderLayer::getGuiTextured,
+                    HEART_CONTAINER,
+                    baseX + (firstGreySlot + i) * 8, heartY, 9, 9,
+                    0xFF606060
+                );
+            }
+        }
+
+        if (!infected) return;
+
+        Disease disease = DiseaseRegistry.get(diseaseId);
+        String name = disease != null ? disease.displayName() : diseaseId;
+        int seconds = ticksRemaining / 20;
+        String timerStr = String.format("%d:%02d", seconds / 60, seconds % 60);
+        int cx = context.getScaledWindowWidth() / 2;
+        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Infection: " + name), cx, 20, 0xFF5555);
+        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Clears in: " + timerStr), cx, 30, 0xFFAAAA);
+    }
+}
+"""
+
+files["client/InfectionModClient.java"] = """\
+package com.natehuntr.infectionmod.client;
+
+import com.natehuntr.infectionmod.network.InfectionSyncPayload;
+import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+
+@Environment(EnvType.CLIENT)
+public class InfectionModClient implements ClientModInitializer {
+    @Override
+    public void onInitializeClient() {
+        ClientPlayNetworking.registerGlobalReceiver(InfectionSyncPayload.ID,
+            (payload, context) -> context.client().execute(() -> {
+                InfectionHudOverlay.infected = payload.infected();
+                InfectionHudOverlay.diseaseId = payload.diseaseId();
+                InfectionHudOverlay.ticksRemaining = payload.ticksRemaining();
+                InfectionHudOverlay.permanentHeartsLost = payload.permanentHeartsLost();
+            })
+        );
+        HudRenderCallback.EVENT.register(InfectionHudOverlay::render);
+    }
+}
+"""
+
+files["infection/InfectionManager.java"] = """\
 package com.natehuntr.infectionmod.infection;
 
 import com.natehuntr.infectionmod.InfectionMod;
@@ -136,3 +248,12 @@ public final class InfectionManager {
     private static boolean isInfected(LivingEntity e) { InfectionState s = e.getAttached(InfectionAttachments.INFECTION); return s != null && s.isInfected(); }
     private static boolean isImmune(LivingEntity e) { InfectionState s = e.getAttached(InfectionAttachments.INFECTION); return s != null && s.isImmune(); }
 }
+"""
+
+for rel, content in files.items():
+    path = os.path.join(src, rel)
+    with open(path, "w") as f:
+        f.write(content)
+    print(f"Written: {rel}")
+
+print("Done.")
