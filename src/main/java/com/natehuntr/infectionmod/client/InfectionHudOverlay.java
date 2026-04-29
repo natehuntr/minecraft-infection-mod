@@ -26,16 +26,31 @@ public final class InfectionHudOverlay {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.options.hudHidden) return;
 
+        int baseX = context.getScaledWindowWidth() / 2 - 91;
+        int heartY = context.getScaledWindowHeight() - 39;
+
+        // Reddish-grey hearts for the 2 hearts temporarily lost to infection
+        if (infected) {
+            int firstTempSlot = 10 - permanentHeartsLost - 2;
+            for (int i = 0; i < 2; i++) {
+                context.drawGuiTexture(
+                    RenderLayer::getGuiTextured,
+                    HEART_CONTAINER,
+                    baseX + (firstTempSlot + i) * 8, heartY, 9, 9,
+                    0xFF884444
+                );
+            }
+        }
+
+        // Dark grey hearts for permanent losses (rightmost slots)
         if (permanentHeartsLost > 0) {
-            int baseX = context.getScaledWindowWidth() / 2 - 91;
-            int heartY = context.getScaledWindowHeight() - 39;
-            int firstGreySlot = 10 - permanentHeartsLost;
+            int firstPermSlot = 10 - permanentHeartsLost;
             for (int i = 0; i < permanentHeartsLost; i++) {
                 context.drawGuiTexture(
                     RenderLayer::getGuiTextured,
                     HEART_CONTAINER,
-                    baseX + (firstGreySlot + i) * 8, heartY, 9, 9,
-                    0xFF606060
+                    baseX + (firstPermSlot + i) * 8, heartY, 9, 9,
+                    0xFF505050
                 );
             }
         }
