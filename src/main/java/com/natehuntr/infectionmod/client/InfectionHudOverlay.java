@@ -37,7 +37,7 @@ public final class InfectionHudOverlay {
                     RenderLayer::getGuiTextured,
                     HEART_CONTAINER,
                     baseX + (firstTempSlot + i) * 8, heartY, 9, 9,
-                    0xFF884444
+                    0xFFBF40BF
                 );
             }
         }
