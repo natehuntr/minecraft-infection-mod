@@ -28,8 +28,11 @@ public final class InfectionHudOverlay {
 
         int baseX = context.getScaledWindowWidth() / 2 - 91;
         int heartY = context.getScaledWindowHeight() - 39;
+        context.getMatrices().push();
+        context.getMatrices().translate(0, 0, 200);
 
         // Reddish-grey hearts for the 2 hearts temporarily lost to infection
+        context.getMatrices().pop();
         if (infected) {
             int firstTempSlot = 10 - permanentHeartsLost - 2;
             for (int i = 0; i < 2; i++) {
@@ -37,7 +40,7 @@ public final class InfectionHudOverlay {
                     RenderLayer::getGuiTextured,
                     HEART_CONTAINER,
                     baseX + (firstTempSlot + i) * 8, heartY, 9, 9,
-                    0xFFBF40BF
+                        0xBFFF00FF
                 );
             }
         }
