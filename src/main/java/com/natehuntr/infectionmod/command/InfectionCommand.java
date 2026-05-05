@@ -65,7 +65,7 @@ public final class InfectionCommand {
 
         List<LivingEntity> nearby = player.getServerWorld().getEntitiesByClass(
                 LivingEntity.class,
-                player.getBoundingBox().expand(16),
+                player.getBoundingBox().expand(50),
                 e -> {
                     InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
                     return s != null && (s.isInfected() || s.isImmune() || s.getPermanentHeartsLost() > 0);

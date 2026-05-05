@@ -5,10 +5,11 @@ import com.natehuntr.infectionmod.disease.Disease;
 import com.natehuntr.infectionmod.disease.DiseaseRegistry;
 import com.natehuntr.infectionmod.network.InfectionSyncPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -19,8 +20,16 @@ import java.util.Set;
 
 public final class InfectionManager {
     private static final double PROXIMITY_RADIUS = 3.0;
+    private static final float SPAWN_INFECTION_CHANCE = 0.05f;
     private static final Identifier TEMP_HEALTH_ID =
-        Identifier.of(InfectionMod.MOD_ID, "infection_health_penalty");
+            Identifier.of(InfectionMod.MOD_ID, "infection_health_penalty");
+
+    static final Set<EntityType<?>> RESERVOIR_HOSTS = Set.of(
+            EntityType.BAT, EntityType.PIG, EntityType.COW, EntityType.CHICKEN,
+            EntityType.SHEEP, EntityType.FOX, EntityType.WOLF, EntityType.CAT,
+            EntityType.VILLAGER, EntityType.HORSE, EntityType.DONKEY, EntityType.MULE,
+            EntityType.RABBIT
+    );
 
     private InfectionManager() {}
 
@@ -49,8 +58,8 @@ public final class InfectionManager {
         Set<LivingEntity> sources = new HashSet<>();
         for (ServerPlayerEntity player : world.getPlayers()) {
             world.getEntitiesByClass(LivingEntity.class,
-                player.getBoundingBox().expand(PROXIMITY_RADIUS + 8),
-                e -> isSusceptible(e) && isInfected(e)
+                    player.getBoundingBox().expand(PROXIMITY_RADIUS + 8),
+                    e -> isSusceptible(e) && isInfected(e)
             ).forEach(sources::add);
         }
         for (LivingEntity source : sources) {
@@ -59,8 +68,8 @@ public final class InfectionManager {
             Disease disease = DiseaseRegistry.get(srcState.getDiseaseId());
             if (disease == null) continue;
             List<LivingEntity> targets = world.getEntitiesByClass(LivingEntity.class,
-                source.getBoundingBox().expand(PROXIMITY_RADIUS),
-                t -> t != source && isSusceptible(t) && !isInfected(t) && !isImmune(t)
+                    source.getBoundingBox().expand(PROXIMITY_RADIUS),
+                    t -> t != source && isSusceptible(t) && !isInfected(t) && !isImmune(t)
             );
             for (LivingEntity target : targets) {
                 boolean contact = source.getBoundingBox().intersects(target.getBoundingBox());
@@ -128,11 +137,22 @@ public final class InfectionManager {
 
     public static void syncToClient(ServerPlayerEntity player, InfectionState state) {
         ServerPlayNetworking.send(player, new InfectionSyncPayload(
-            state.isInfected(), state.getDiseaseId() != null ? state.getDiseaseId() : "", state.getTicksRemaining(), state.getPermanentHeartsLost()
+                state.isInfected(), state.getDiseaseId() != null ? state.getDiseaseId() : "", state.getTicksRemaining(), state.getPermanentHeartsLost()
         ));
     }
 
-    public static boolean isSusceptible(LivingEntity e) { return e instanceof PlayerEntity || e instanceof PassiveEntity; }
+    public static boolean isSusceptible(LivingEntity e) { return e instanceof PlayerEntity || RESERVOIR_HOSTS.contains(e.getType()); }
+
+    public static void onEntityLoad(Entity entity, ServerWorld world) {
+        if (!(entity instanceof LivingEntity living)) return;
+        if (!RESERVOIR_HOSTS.contains(living.getType())) return;
+        if (living.getAttached(InfectionAttachments.INFECTION) != null) return;
+        living.getAttachedOrCreate(InfectionAttachments.INFECTION);
+        if (world.getRandom().nextFloat() < SPAWN_INFECTION_CHANCE) {
+            infect(living, DiseaseRegistry.CRIMSON_FEVER);
+        }
+    }
+
     private static boolean isInfected(LivingEntity e) { InfectionState s = e.getAttached(InfectionAttachments.INFECTION); return s != null && s.isInfected(); }
     private static boolean isImmune(LivingEntity e) { InfectionState s = e.getAttached(InfectionAttachments.INFECTION); return s != null && s.isImmune(); }
 }
