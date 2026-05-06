@@ -20,6 +20,8 @@ import java.util.Set;
 
 public final class InfectionManager {
     private static final double PROXIMITY_RADIUS = 3.0;
+    private static final double PROXIMITY_RADIUS_MEDIUM = 6.0;
+    private static final float MEDIUM_TRANSMISSION_RATE = 0.05f;
     private static final float SPAWN_INFECTION_CHANCE = 0.05f;
     private static final Identifier TEMP_HEALTH_ID =
             Identifier.of(InfectionMod.MOD_ID, "infection_health_penalty");
@@ -58,7 +60,7 @@ public final class InfectionManager {
         Set<LivingEntity> sources = new HashSet<>();
         for (ServerPlayerEntity player : world.getPlayers()) {
             world.getEntitiesByClass(LivingEntity.class,
-                    player.getBoundingBox().expand(PROXIMITY_RADIUS + 8),
+                    player.getBoundingBox().expand(PROXIMITY_RADIUS_MEDIUM + 8),
                     e -> isSusceptible(e) && isInfected(e)
             ).forEach(sources::add);
         }

@@ -73,7 +73,7 @@ public final class InfectionCommand {
         );
 
         if (nearby.isEmpty()) {
-            source.sendFeedback(() -> Text.literal("No infected/immune entities within 16 blocks"), false);
+            source.sendFeedback(() -> Text.literal("No infected/immune entities within 50 blocks"), false);
             return 0;
         }
 

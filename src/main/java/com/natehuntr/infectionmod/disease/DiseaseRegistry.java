@@ -8,7 +8,7 @@ public final class DiseaseRegistry {
 
     public static final Disease CRIMSON_FEVER = register(new Disease(
             "crimson_fever", "Crimson Fever",
-            0.30f, 0.5f, 0, 12000, 0.80f, 120000
+            0.30f, 0.5f, 0, 48000, 0.80f, 24000
     ));
 
     private DiseaseRegistry() {}
