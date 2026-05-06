@@ -1,3 +1,4 @@
+# Modelling infection dynamics in Minecraft
 
 A Fabric mod for Minecraft 1.21.4 that simulates infectious disease dynamics between players, animals, and villagers. 
 
