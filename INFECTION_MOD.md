@@ -1,4 +1,6 @@
 
+# Infection Mod — Feature Overview
+
 A Fabric mod for Minecraft 1.21.4 that simulates infectious disease dynamics between players and animals.
 
 ---
