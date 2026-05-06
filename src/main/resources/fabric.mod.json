@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "infection_mod",
+  "version": "${version}",
+  "name": "Infection Mod",
+  "description": "A STEM-focused mod simulating infectious disease dynamics.",
+  "authors": ["natehuntr"],
+  "contact": { "sources": "https://github.com/natehuntr/minecraft-infection-mod" },
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.natehuntr.infectionmod.InfectionMod"],
+    "client": ["com.natehuntr.infectionmod.client.InfectionModClient"]
+  },
+  "mixins": ["infection_mod.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.4",
+    "java": ">=21"
+  }
+}
