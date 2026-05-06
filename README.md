@@ -113,7 +113,7 @@ Additional future features:
 |---|---|
 | Platform | Fabric Loader 0.19.2 |
 | Fabric API | 0.145.1+26.1 |
-| Minecraft | 1.21.5 |
+| Minecraft | 1.21.4 |
 | Infection state storage | Fabric Data Attachments, persisted to disk via Codec |
 | Client sync | Custom `InfectionSyncPayload` packet sent every second while infected and on state changes |
 | Animal infection state | Tracked in memory; persists across chunk reloads |
