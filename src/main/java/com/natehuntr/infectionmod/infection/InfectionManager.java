@@ -56,29 +56,22 @@ public final class InfectionManager {
         }
     }
 
-    private static void spreadDisease(ServerWorld world) {
-        Set<LivingEntity> sources = new HashSet<>();
-        for (ServerPlayerEntity player : world.getPlayers()) {
-            world.getEntitiesByClass(LivingEntity.class,
-                    player.getBoundingBox().expand(PROXIMITY_RADIUS_MEDIUM + 8),
-                    e -> isSusceptible(e) && isInfected(e)
-            ).forEach(sources::add);
+    List<LivingEntity> targets = world.getEntitiesByClass(LivingEntity.class,
+            source.getBoundingBox().expand(PROXIMITY_RADIUS_MEDIUM),
+            t -> t != source && isSusceptible(t) && !isInfected(t) && !isImmune(t)
+    );
+for (LivingEntity target : targets) {
+        boolean contact = source.getBoundingBox().intersects(target.getBoundingBox());
+        boolean closeRange = source.getBoundingBox().expand(PROXIMITY_RADIUS).intersects(target.getBoundingBox());
+        float chance;
+        if (contact) {
+            chance = Math.min(disease.baseTransmissionRate() * 2, 1.0f);
+        } else if (closeRange) {
+            chance = disease.baseTransmissionRate();
+        } else {
+            chance = MEDIUM_TRANSMISSION_RATE;
         }
-        for (LivingEntity source : sources) {
-            InfectionState srcState = source.getAttached(InfectionAttachments.INFECTION);
-            if (srcState == null) continue;
-            Disease disease = DiseaseRegistry.get(srcState.getDiseaseId());
-            if (disease == null) continue;
-            List<LivingEntity> targets = world.getEntitiesByClass(LivingEntity.class,
-                    source.getBoundingBox().expand(PROXIMITY_RADIUS),
-                    t -> t != source && isSusceptible(t) && !isInfected(t) && !isImmune(t)
-            );
-            for (LivingEntity target : targets) {
-                boolean contact = source.getBoundingBox().intersects(target.getBoundingBox());
-                float chance = contact ? Math.min(disease.baseTransmissionRate() * 2, 1.0f) : disease.baseTransmissionRate();
-                if (world.getRandom().nextFloat() < chance) infect(target, disease);
-            }
-        }
+        if (world.getRandom().nextFloat() < chance) infect(target, disease);
     }
 
     public static void infect(LivingEntity entity, Disease disease) {
