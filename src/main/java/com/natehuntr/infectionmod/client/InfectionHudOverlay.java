@@ -10,6 +10,8 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Environment(EnvType.CLIENT)
 public final class InfectionHudOverlay {
@@ -17,6 +19,8 @@ public final class InfectionHudOverlay {
     public static volatile String diseaseId = "";
     public static volatile int ticksRemaining = 0;
     public static volatile int permanentHeartsLost = 0;
+    public static volatile List<String> symptomIds = List.of();
+    public static volatile int symptomTicksRemaining = 0;
 
     private static final Identifier HEART_CONTAINER = Identifier.ofVanilla("hud/heart/container");
 
@@ -28,35 +32,35 @@ public final class InfectionHudOverlay {
 
         int baseX = context.getScaledWindowWidth() / 2 - 91;
         int heartY = context.getScaledWindowHeight() - 39;
+
         context.getMatrices().push();
         context.getMatrices().translate(0, 0, 200);
 
-        // Reddish-grey hearts for the 2 hearts temporarily lost to infection
-        context.getMatrices().pop();
         if (infected) {
             int firstTempSlot = 10 - permanentHeartsLost - 2;
             for (int i = 0; i < 2; i++) {
                 context.drawGuiTexture(
-                    RenderLayer::getGuiTextured,
-                    HEART_CONTAINER,
-                    baseX + (firstTempSlot + i) * 8, heartY, 9, 9,
+                        RenderLayer::getGuiTextured,
+                        HEART_CONTAINER,
+                        baseX + (firstTempSlot + i) * 8, heartY, 9, 9,
                         0xBFFF00FF
                 );
             }
         }
 
-        // Dark grey hearts for permanent losses (rightmost slots)
         if (permanentHeartsLost > 0) {
             int firstPermSlot = 10 - permanentHeartsLost;
             for (int i = 0; i < permanentHeartsLost; i++) {
                 context.drawGuiTexture(
-                    RenderLayer::getGuiTextured,
-                    HEART_CONTAINER,
-                    baseX + (firstPermSlot + i) * 8, heartY, 9, 9,
-                    0xFF505050
+                        RenderLayer::getGuiTextured,
+                        HEART_CONTAINER,
+                        baseX + (firstPermSlot + i) * 8, heartY, 9, 9,
+                        0xFF505050
                 );
             }
         }
+
+        context.getMatrices().pop();
 
         if (!infected) return;
 
@@ -67,5 +71,21 @@ public final class InfectionHudOverlay {
         int cx = context.getScaledWindowWidth() / 2;
         context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Infection: " + name), cx, 20, 0xFF5555);
         context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Clears in: " + timerStr), cx, 30, 0xFFAAAA);
+
+        if (!symptomIds.isEmpty() && symptomTicksRemaining > 0) {
+            String names = symptomIds.stream()
+                    .map(InfectionHudOverlay::symptomDisplayName)
+                    .collect(Collectors.joining(", "));
+            context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Symptoms: " + names), cx, 40, 0xFFAA00);
+        }
+    }
+
+    private static String symptomDisplayName(String id) {
+        return switch (id) {
+            case "slowness" -> "Fatigue";
+            case "nausea"   -> "Nausea";
+            case "weakness" -> "Weakness";
+            default         -> id;
+        };
     }
 }
