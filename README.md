@@ -94,8 +94,7 @@ Player: perm hearts lost: 2
 
 Current next planned feature:
 - Addition of a 30% chance of symptoms, which do not last the entirety of the disease: Fatigue (slowness potion), nausea, and weakness (reduced damage)
-  - These symptoms will occur for anywhere between 3-20 minutes
-  - There is a 1% chance that multiple symptoms will arise
+  - These symptoms will occur for anywhere between 3-20 minutes, with a a 1% chance that multiple symptoms will arise
 
 Additional future features:
 - Vaccinations, available at villages or at health huts, which are able to give resistance
