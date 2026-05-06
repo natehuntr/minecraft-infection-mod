@@ -92,10 +92,16 @@ Player: perm hearts lost: 2
 
 ## Planned Features
 
-- Multiple diseases with distinct transmission vectors (airborne, waterborne, zoonotic)
-- Fictional disease names with differing severity, virulence, and vaccine compatibility
-- Health huts — randomly generated structures containing a Doctor NPC
-- Doctor NPC offering vaccination, and treatments for emeralds
+Current next planned feature:
+- Addition of a 30% chance of symptoms, which do not last the entirety of the disease: Fatigue (slowness potion), nausea, and weakness (reduced damage)
+  - These symptoms will occur for anywhere between 3-20 minutes
+  - There is a 1% chance that multiple symptoms will arise
+
+Additional future features:
+- Vaccinations, available at villages or at health huts, which are able to give resistance
+  - Modelling specific vaccination dynamics, including mild side effects, decreasing immunity, and different requirements for dose amount and schedule
+- Multiple diseases with distinct transmission vectors (airborne, waterborne, zoonotic), differing severity, virulence, and vaccine compatibility
+- Health huts — randomly generated structures containing a Doctor NPC offering vaccination, and treatments for emeralds
 - Village-level herd immunity tracking
 - Mutation system altering transmissibility and immune evasion over time
 - Waning immunity with configurable decay rates per disease
