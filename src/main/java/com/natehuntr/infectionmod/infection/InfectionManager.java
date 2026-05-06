@@ -10,10 +10,15 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.effect.StatusEffect;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -23,6 +28,9 @@ public final class InfectionManager {
     private static final double PROXIMITY_RADIUS_MEDIUM = 6.0;
     private static final float MEDIUM_TRANSMISSION_RATE = 0.05f;
     private static final float SPAWN_INFECTION_CHANCE = 0.05f;
+    private static final int SYMPTOM_TICKS_MIN = 3600;
+    private static final int SYMPTOM_TICKS_MAX = 24000;
+    private static final List<String> SYMPTOM_IDS = List.of("slowness", "nausea", "weakness");
     private static final Identifier TEMP_HEALTH_ID =
             Identifier.of(InfectionMod.MOD_ID, "infection_health_penalty");
 
@@ -44,11 +52,15 @@ public final class InfectionManager {
         InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
         if (state.isInfected()) {
             state.tickInfection();
+            state.tickSymptoms();
             if (state.getTicksRemaining() <= 0) {
                 recover(world, player, state);
             } else {
                 ensureHealthPenalty(player);
-                if (world.getTime() % 20 == 0) syncToClient(player, state);
+                if (world.getTime() % 20 == 0) {
+                    applySymptomEffects(player, state);
+                    syncToClient(player, state);
+                }
             }
         } else if (state.isImmune()) {
             state.tickImmunity();
@@ -92,11 +104,19 @@ public final class InfectionManager {
     public static void infect(LivingEntity entity, Disease disease) {
         InfectionState state = entity.getAttachedOrCreate(InfectionAttachments.INFECTION);
         state.infect(disease.id(), disease.durationTicks());
-        if (entity instanceof ServerPlayerEntity player) { ensureHealthPenalty(player); syncToClient(player, state); }
+        if (entity instanceof ServerPlayerEntity player) {
+            ensureHealthPenalty(player);
+            rollSymptoms(player.getServerWorld(), state);
+            syncToClient(player, state);
+        }
     }
 
     private static void recover(ServerWorld world, ServerPlayerEntity player, InfectionState state) {
         removeHealthPenalty(player);
+        for (String id : state.getActiveSymptomIds()) {
+            RegistryEntry<StatusEffect> effect = effectForId(id);
+            if (effect != null) player.removeStatusEffect(effect);
+        }
         double maxHealth = player.getAttributeValue(EntityAttributes.MAX_HEALTH);
         if (world.getRandom().nextFloat() < state.permanentLossChance() && maxHealth - 2.0 >= 8.0) {
             state.recordPermanentHeartLoss();
@@ -106,6 +126,40 @@ public final class InfectionManager {
         Disease disease = DiseaseRegistry.get(state.getDiseaseId());
         state.recover(disease != null ? disease.immunityDurationTicks() : 0);
         syncToClient(player, state);
+    }
+
+    private static void rollSymptoms(ServerWorld world, InfectionState state) {
+        float roll = world.getRandom().nextFloat();
+        int count = roll < 0.01f ? 2 : roll < 0.31f ? 1 : 0;
+        if (count == 0) return;
+
+        List<String> pool = new ArrayList<>(SYMPTOM_IDS);
+        List<String> chosen = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            chosen.add(pool.remove(world.getRandom().nextInt(pool.size())));
+        }
+        int duration = SYMPTOM_TICKS_MIN + world.getRandom().nextInt(SYMPTOM_TICKS_MAX - SYMPTOM_TICKS_MIN + 1);
+        state.setSymptoms(chosen, duration);
+    }
+
+    private static void applySymptomEffects(ServerPlayerEntity player, InfectionState state) {
+        if (!state.hasSymptoms()) return;
+        int ticks = state.getSymptomTicksRemaining();
+        for (String id : state.getActiveSymptomIds()) {
+            RegistryEntry<StatusEffect> effect = effectForId(id);
+            if (effect == null) continue;
+            int amp = "slowness".equals(id) ? 1 : 0;
+            player.addStatusEffect(new StatusEffectInstance(effect, ticks, amp, false, true));
+        }
+    }
+
+    private static RegistryEntry<StatusEffect> effectForId(String id) {
+        return switch (id) {
+            case "slowness" -> StatusEffects.SLOWNESS;
+            case "nausea"   -> StatusEffects.NAUSEA;
+            case "weakness" -> StatusEffects.WEAKNESS;
+            default         -> null;
+        };
     }
 
     private static void ensureHealthPenalty(ServerPlayerEntity player) {
@@ -133,7 +187,10 @@ public final class InfectionManager {
 
     public static void reapplyOnLogin(ServerPlayerEntity player) {
         InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
-        if (state.isInfected()) ensureHealthPenalty(player);
+        if (state.isInfected()) {
+            ensureHealthPenalty(player);
+            applySymptomEffects(player, state);
+        }
         applyPermanentLoss(player, state.getPermanentHeartsLost());
         syncToClient(player, state);
     }
@@ -147,7 +204,12 @@ public final class InfectionManager {
 
     public static void syncToClient(ServerPlayerEntity player, InfectionState state) {
         ServerPlayNetworking.send(player, new InfectionSyncPayload(
-                state.isInfected(), state.getDiseaseId() != null ? state.getDiseaseId() : "", state.getTicksRemaining(), state.getPermanentHeartsLost()
+                state.isInfected(),
+                state.getDiseaseId() != null ? state.getDiseaseId() : "",
+                state.getTicksRemaining(),
+                state.getPermanentHeartsLost(),
+                state.getActiveSymptomIds(),
+                state.getSymptomTicksRemaining()
         ));
     }
 

@@ -12,12 +12,14 @@ public class InfectionModClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientPlayNetworking.registerGlobalReceiver(InfectionSyncPayload.ID,
-            (payload, context) -> context.client().execute(() -> {
-                InfectionHudOverlay.infected = payload.infected();
-                InfectionHudOverlay.diseaseId = payload.diseaseId();
-                InfectionHudOverlay.ticksRemaining = payload.ticksRemaining();
-                InfectionHudOverlay.permanentHeartsLost = payload.permanentHeartsLost();
-            })
+                (payload, context) -> context.client().execute(() -> {
+                    InfectionHudOverlay.infected = payload.infected();
+                    InfectionHudOverlay.diseaseId = payload.diseaseId();
+                    InfectionHudOverlay.ticksRemaining = payload.ticksRemaining();
+                    InfectionHudOverlay.permanentHeartsLost = payload.permanentHeartsLost();
+                    InfectionHudOverlay.symptomIds = payload.symptomIds();
+                    InfectionHudOverlay.symptomTicksRemaining = payload.symptomTicksRemaining();
+                })
         );
         HudRenderCallback.EVENT.register(InfectionHudOverlay::render);
     }
