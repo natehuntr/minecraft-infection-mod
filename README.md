@@ -1,12 +1,11 @@
-# Infection Mod
 
-A Fabric mod for Minecraft 1.21.5 that simulates infectious disease dynamics between players, animals, and villagers.
+A Fabric mod for Minecraft 1.21.4 that simulates infectious disease dynamics between players, animals, and villagers. 
 
 ---
 
 ## Overview
 
-Infection Mod is a STEM-focused, systems-based learning project embedded in Minecraft — one of the most widely used interactive platforms globally. Its goal is to build intuitive understanding of cause-and-effect relationships in disease prevention and health systems, including:
+Infectious Disease Mod is a systems-based learning project embedded in Minecraft — one of the most widely used interactive platforms globally. Its goal is to build intuitive understanding of cause-and-effect relationships in disease prevention and health systems, including:
 
 - **Timing** — when you act matters as much as whether you act
 - **Partial protection** — vaccines reduce risk without eliminating it
@@ -15,7 +14,7 @@ Infection Mod is a STEM-focused, systems-based learning project embedded in Mine
 - **Access and context** — prevention tools are not equally available to all
 - **Community dynamics** — individual choices aggregate into population-level outcomes
 
-Rather than persuading players toward any particular view, the mod asks a systems-level question: *why might people not access, accept, want, or be able to use prevention tools, and how do system structures shape those outcomes?* By embedding these dynamics as background game mechanics, players experience how disease systems behave over time — reinforcing the connection between individual choices and collective outcomes without messaging or advocacy.
+Rather than persuading players toward any particular view, the mod asks a systems-level question: *why might people not access, accept, want, or be able to use prevention tools, and how do system structures shape those outcomes?* By embedding these dynamics as background game mechanics, players experience how disease systems behave over time — reinforcing the connection between individual choices and collective outcomes without explicit messaging or advocacy.
 
 ---
 
@@ -98,7 +97,7 @@ Current next planned feature:
 
 Additional future features:
 - Vaccinations, available at villages or at health huts, which are able to give resistance
-  - Modelling specific vaccination dynamics, including mild side effects, decreasing immunity, and different requirements for dose amount and schedule
+- Modelling specific vaccination dynamics, including mild side effects, decreasing immunity, and different requirements for dose amount and schedule
 - Multiple diseases with distinct transmission vectors (airborne, waterborne, zoonotic), differing severity, virulence, and vaccine compatibility
 - Health huts — randomly generated structures containing a Doctor NPC offering vaccination, and treatments for emeralds
 - Village-level herd immunity tracking
@@ -134,12 +133,6 @@ Additional future features:
 This project is motivated by real-world experience in disease prevention and the recognition that scientific efficacy alone does not guarantee population-level impact. Uptake, persistence, access, trust, and fit within daily life strongly shape health outcomes — and these are not individual failures but system-level phenomena.
 
 By embedding prevention dynamics as Minecraft mechanics, players encounter these systems organically: a village with low vaccination coverage becomes a genuine hazard; brief exposure carries low risk while prolonged proximity compounds it; immunity wanes and requires renewal; the doctor costs emeralds you may not have. No conclusions are drawn for the player — the system simply behaves, and players experience the consequences of how it behaves.
-
----
-
-## License
-
-MIT License — see `LICENSE` for details.
 
 ---
 
