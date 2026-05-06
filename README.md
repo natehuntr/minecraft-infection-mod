@@ -79,9 +79,9 @@ All commands require operator permission (level 2).
 |---|---|
 | `/infect [player]` | Infects yourself or a named player with Crimson Fever immediately |
 | `/recover [player]` | Clears an active infection from yourself or a named player |
-| `/infectionstatus` | Lists all infected, immune, or permanently-damaged entities within 50 blocks |
+| `/infection-status` | Lists all infected, immune, or permanently-damaged entities within 50 blocks |
 
-Example `/infectionstatus` output:
+Example `/infection-status` output:
 ```
 Cow: INFECTED (crimson_fever) 342s remaining
 Sheep: IMMUNE 4821s remaining
@@ -122,7 +122,7 @@ Additional future features:
 
 ## Installation
 
-1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 1.21.5
+1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 1.21.4
 2. Download [Fabric API](https://modrinth.com/mod/fabric-api) and place it in your `mods` folder
 3. Download the latest Infection Mod release and place it in your `mods` folder
 4. Launch Minecraft using the Fabric profile
