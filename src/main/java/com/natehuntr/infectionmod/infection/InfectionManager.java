@@ -42,6 +42,11 @@ public final class InfectionManager {
     // Tracks non-player infected entities so they can be ticked each second
     private static final Set<UUID> infectedAnimalUUIDs = new HashSet<>();
 
+    // Accumulated effective exposure seconds per (source UUID : target UUID) pair.
+    // Increments each second entities are in range (rate varies by proximity);
+    // decays at 2× the base rate per second when out of range.
+    private static final Map<String, Float> exposureCounters = new HashMap<>();
+
     private InfectionManager() {}
 
     public static void tick(ServerWorld world) {
@@ -163,6 +168,9 @@ public final class InfectionManager {
                     e -> isInfectious(e)
             ).forEach(sources::add);
         }
+
+        Set<String> activeThisSecond = new HashSet<>();
+
         for (LivingEntity source : sources) {
             InfectionState srcState = source.getAttached(InfectionAttachments.INFECTION);
             if (srcState == null) continue;
@@ -178,18 +186,47 @@ public final class InfectionManager {
             );
             for (LivingEntity target : targets) {
                 boolean contact = source.getBoundingBox().intersects(target.getBoundingBox());
-                boolean closeRange = source.getBoundingBox().expand(PROXIMITY_RADIUS).intersects(target.getBoundingBox());
-                float chance;
-                if (contact) {
-                    chance = Math.min(disease.baseTransmissionRate() * 2, 1.0f);
-                } else if (closeRange) {
-                    chance = disease.baseTransmissionRate();
-                } else {
-                    chance = Math.max(disease.baseTransmissionRate() / 6.0f, 0.001f);
+                boolean closeRange = source.getBoundingBox().expand(PROXIMITY_RADIUS)
+                        .intersects(target.getBoundingBox());
+
+                // Accumulation rate: contact counts double (halves effective τ),
+                // medium range counts at 1/6 (lengthens effective τ sixfold).
+                float rate = contact ? 2.0f : closeRange ? 1.0f : 1.0f / 6.0f;
+
+                String key = source.getUuidAsString() + ":" + target.getUuidAsString();
+                float prevAcc = exposureCounters.getOrDefault(key, 0.0f);
+                float newAcc = prevAcc + rate;
+                exposureCounters.put(key, newAcc);
+                activeThisSecond.add(key);
+
+                float chance = transmissionChance(disease, prevAcc, newAcc, rate);
+                if (world.getRandom().nextFloat() < chance) {
+                    infect(target, disease);
+                    exposureCounters.remove(key);
                 }
-                if (world.getRandom().nextFloat() < chance) infect(target, disease);
             }
         }
+
+        // Decay counters for pairs not in range this second (2× base rate per second)
+        exposureCounters.entrySet().removeIf(entry -> {
+            if (activeThisSecond.contains(entry.getKey())) return false;
+            float decayed = entry.getValue() - 2.0f;
+            if (decayed <= 0) return true;
+            entry.setValue(decayed);
+            return false;
+        });
+    }
+
+    private static float transmissionChance(Disease disease, float prevAcc, float newAcc, float rate) {
+        int tau = disease.exposureHalfLifeSeconds();
+        if (tau <= 0) {
+            // Flat rate — duration irrelevant (prion model)
+            return disease.maxTransmissionRate() * rate;
+        }
+        // Marginal probability of THIS second's exposure causing infection:
+        // P(newAcc) - P(prevAcc) where P(t) = maxP × (1 - e^(-t/τ))
+        float maxP = disease.maxTransmissionRate();
+        return maxP * (float)(Math.exp(-prevAcc / tau) - Math.exp(-newAcc / tau));
     }
 
     // -------------------------------------------------------------------------
