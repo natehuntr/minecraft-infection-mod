@@ -3,9 +3,12 @@ package com.natehuntr.infectionmod.infection;
 import com.natehuntr.infectionmod.InfectionMod;
 import com.natehuntr.infectionmod.disease.Disease;
 import com.natehuntr.infectionmod.disease.DiseaseRegistry;
+import com.natehuntr.infectionmod.item.InfectionItems;
 import com.natehuntr.infectionmod.network.InfectionSyncPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -13,31 +16,45 @@ import net.minecraft.entity.effect.StatusEffect;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 public final class InfectionManager {
     private static final double PROXIMITY_RADIUS = 3.0;
     private static final double PROXIMITY_RADIUS_MEDIUM = 6.0;
-    private static final float SPAWN_INFECTION_CHANCE = 0.05f;
     private static final int SYMPTOM_TICKS_MIN = 3600;
     private static final int SYMPTOM_TICKS_MAX = 24000;
     private static final List<String> SYMPTOM_IDS = List.of("slowness", "nausea", "weakness");
     private static final Identifier TEMP_HEALTH_ID =
             Identifier.of(InfectionMod.MOD_ID, "infection_health_penalty");
 
+    // Tracks non-player infected entities so they can be ticked each second
+    private static final Set<UUID> infectedAnimalUUIDs = new HashSet<>();
+
     private InfectionManager() {}
 
     public static void tick(ServerWorld world) {
         for (ServerPlayerEntity player : world.getPlayers()) tickPlayer(world, player);
-        if (world.getTime() % 20 == 0) spreadDisease(world);
+        if (world.getTime() % 20 == 0) {
+            spreadDisease(world);
+            tickAnimals(world);
+        }
     }
+
+    // -------------------------------------------------------------------------
+    // Player ticking
+    // -------------------------------------------------------------------------
 
     private static void tickPlayer(ServerWorld world, ServerPlayerEntity player) {
         InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
@@ -45,7 +62,6 @@ public final class InfectionManager {
         if (state.isExposed()) {
             state.tickIncubation();
             if (state.getIncubationTicksRemaining() <= 0) {
-                // Incubation just ended — become infectious
                 ensureHealthPenalty(player);
                 rollSymptoms(world, state);
                 syncToClient(player, state);
@@ -56,7 +72,7 @@ public final class InfectionManager {
             state.tickInfection();
             state.tickSymptoms();
             if (state.getTicksRemaining() <= 0) {
-                recover(world, player, state);
+                recoverPlayer(world, player, state);
             } else {
                 ensureHealthPenalty(player);
                 if (world.getTime() % 20 == 0) {
@@ -72,6 +88,72 @@ public final class InfectionManager {
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Animal ticking — called once per second (every 20 game ticks)
+    // -------------------------------------------------------------------------
+
+    private static void tickAnimals(ServerWorld world) {
+        Iterator<UUID> iter = infectedAnimalUUIDs.iterator();
+        while (iter.hasNext()) {
+            UUID uuid = iter.next();
+            Entity entity = world.getEntity(uuid);
+            if (!(entity instanceof LivingEntity living) || living.isRemoved()) {
+                iter.remove();
+                continue;
+            }
+            if (living instanceof ServerPlayerEntity) {
+                iter.remove();
+                continue;
+            }
+            InfectionState state = living.getAttached(InfectionAttachments.INFECTION);
+            if (state == null || !state.isInfected()) {
+                iter.remove();
+                continue;
+            }
+            tickAnimal(world, living, state, iter);
+        }
+    }
+
+    private static void tickAnimal(ServerWorld world, LivingEntity animal,
+                                   InfectionState state, Iterator<UUID> iter) {
+        if (state.isExposed()) {
+            // Advance incubation by one second (20 ticks) per call
+            state.tickIncubation(20);
+        } else if (state.isInfectious()) {
+            state.tickInfection(20);
+            if (state.getTicksRemaining() <= 0) {
+                recoverAnimal(world, animal, state);
+                iter.remove();
+            }
+        }
+    }
+
+    private static void recoverAnimal(ServerWorld world, LivingEntity animal, InfectionState state) {
+        Disease disease = DiseaseRegistry.get(state.getDiseaseId());
+        float cfr = disease != null ? disease.caseFatalityRate() : 0f;
+
+        if (cfr > 0 && world.getRandom().nextFloat() < cfr) {
+            dropInfectedMeat(world, animal, state.getDiseaseId());
+            // Kill with disease damage source; vanilla loot table still fires separately
+            animal.damage(world, world.getDamageSources().generic(), Float.MAX_VALUE);
+        } else {
+            state.recover(disease != null ? disease.immunityDurationTicks() : 0);
+        }
+    }
+
+    private static void dropInfectedMeat(ServerWorld world, LivingEntity animal, String diseaseId) {
+        if (!"wasting_curse".equals(diseaseId)) return;
+        if (animal.getType() != EntityType.COW && animal.getType() != EntityType.MOOSHROOM) return;
+        ItemStack stack = new ItemStack(InfectionItems.INFECTED_BEEF);
+        ItemEntity drop = new ItemEntity(world, animal.getX(), animal.getY() + 0.5, animal.getZ(), stack);
+        drop.setVelocity(0, 0.2, 0);
+        world.spawnEntity(drop);
+    }
+
+    // -------------------------------------------------------------------------
+    // Spread
+    // -------------------------------------------------------------------------
 
     private static void spreadDisease(ServerWorld world) {
         Set<LivingEntity> sources = new HashSet<>();
@@ -103,13 +185,16 @@ public final class InfectionManager {
                 } else if (closeRange) {
                     chance = disease.baseTransmissionRate();
                 } else {
-                    // Medium range: 1/6 of base rate, min 0.1%
                     chance = Math.max(disease.baseTransmissionRate() / 6.0f, 0.001f);
                 }
                 if (world.getRandom().nextFloat() < chance) infect(target, disease);
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Infection entry point
+    // -------------------------------------------------------------------------
 
     public static void infect(LivingEntity entity, Disease disease) {
         InfectionState state = entity.getAttachedOrCreate(InfectionAttachments.INFECTION);
@@ -120,10 +205,16 @@ public final class InfectionManager {
                 rollSymptoms(player.getServerWorld(), state);
             }
             syncToClient(player, state);
+        } else {
+            infectedAnimalUUIDs.add(entity.getUuid());
         }
     }
 
-    private static void recover(ServerWorld world, ServerPlayerEntity player, InfectionState state) {
+    // -------------------------------------------------------------------------
+    // Player recovery
+    // -------------------------------------------------------------------------
+
+    private static void recoverPlayer(ServerWorld world, ServerPlayerEntity player, InfectionState state) {
         Disease disease = DiseaseRegistry.get(state.getDiseaseId());
         float cfr = disease != null ? disease.caseFatalityRate() : 0f;
 
@@ -134,14 +225,12 @@ public final class InfectionManager {
         }
 
         if (cfr > 0 && world.getRandom().nextFloat() < cfr) {
-            // Fatal outcome — clear state before kill so respawn starts clean
             state.clearInfection();
             syncToClient(player, state);
             player.damage(world, world.getDamageSources().generic(), Float.MAX_VALUE);
             return;
         }
 
-        // Survival — check for permanent heart loss
         double maxHealth = player.getAttributeValue(EntityAttributes.MAX_HEALTH);
         if (world.getRandom().nextFloat() < state.permanentLossChance() && maxHealth - 2.0 >= 8.0) {
             state.recordPermanentHeartLoss();
@@ -151,6 +240,10 @@ public final class InfectionManager {
         state.recover(disease != null ? disease.immunityDurationTicks() : 0);
         syncToClient(player, state);
     }
+
+    // -------------------------------------------------------------------------
+    // Symptoms
+    // -------------------------------------------------------------------------
 
     private static void rollSymptoms(ServerWorld world, InfectionState state) {
         float roll = world.getRandom().nextFloat();
@@ -186,6 +279,10 @@ public final class InfectionManager {
         };
     }
 
+    // -------------------------------------------------------------------------
+    // Health modifiers
+    // -------------------------------------------------------------------------
+
     private static void ensureHealthPenalty(ServerPlayerEntity player) {
         var attr = player.getAttributeInstance(EntityAttributes.MAX_HEALTH);
         if (attr != null && attr.getModifier(TEMP_HEALTH_ID) == null) {
@@ -209,6 +306,10 @@ public final class InfectionManager {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Login / respawn
+    // -------------------------------------------------------------------------
+
     public static void reapplyOnLogin(ServerPlayerEntity player) {
         InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
         if (state.isInfectious()) {
@@ -226,6 +327,10 @@ public final class InfectionManager {
         syncToClient(player, state);
     }
 
+    // -------------------------------------------------------------------------
+    // Networking
+    // -------------------------------------------------------------------------
+
     public static void syncToClient(ServerPlayerEntity player, InfectionState state) {
         ServerPlayNetworking.send(player, new InfectionSyncPayload(
                 state.isInfected(),
@@ -239,15 +344,9 @@ public final class InfectionManager {
         ));
     }
 
-    // Any entity that can contract at least one disease
-    public static boolean isSusceptible(LivingEntity e) {
-        return e instanceof PlayerEntity || DiseaseRegistry.getAllReservoirHosts().contains(e.getType());
-    }
-
-    // Whether a specific entity can host a specific disease
-    private static boolean isTargetSusceptibleTo(LivingEntity t, Disease disease) {
-        return t instanceof PlayerEntity || DiseaseRegistry.getReservoirHosts(disease.id()).contains(t.getType());
-    }
+    // -------------------------------------------------------------------------
+    // Entity load / spawn infection
+    // -------------------------------------------------------------------------
 
     public static void onEntityLoad(Entity entity, ServerWorld world) {
         if (!(entity instanceof LivingEntity living)) return;
@@ -255,10 +354,24 @@ public final class InfectionManager {
         if (hostDiseases.isEmpty()) return;
         if (living.getAttached(InfectionAttachments.INFECTION) != null) return;
         living.getAttachedOrCreate(InfectionAttachments.INFECTION);
-        if (world.getRandom().nextFloat() < SPAWN_INFECTION_CHANCE) {
-            Disease disease = hostDiseases.get(world.getRandom().nextInt(hostDiseases.size()));
-            infect(living, disease);
+        for (Disease disease : hostDiseases) {
+            if (world.getRandom().nextFloat() < disease.spawnInfectionChance()) {
+                infect(living, disease);
+                break; // infect with at most one disease at spawn
+            }
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    public static boolean isSusceptible(LivingEntity e) {
+        return e instanceof PlayerEntity || DiseaseRegistry.getAllReservoirHosts().contains(e.getType());
+    }
+
+    private static boolean isTargetSusceptibleTo(LivingEntity t, Disease disease) {
+        return t instanceof PlayerEntity || DiseaseRegistry.getReservoirHosts(disease.id()).contains(t.getType());
     }
 
     private static boolean isInfected(LivingEntity e) {

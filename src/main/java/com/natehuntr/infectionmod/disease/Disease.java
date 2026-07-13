@@ -4,7 +4,7 @@ public record Disease(
         String id,
         String displayName,
         float baseTransmissionRate,
-        float severity,
+        float spawnInfectionChance,
         int incubationTicks,
         int durationTicks,
         float caseFatalityRate,

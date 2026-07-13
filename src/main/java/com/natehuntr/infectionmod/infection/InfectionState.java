@@ -70,7 +70,9 @@ public class InfectionState {
     }
 
     public void tickIncubation() { if (incubationTicksRemaining > 0) incubationTicksRemaining--; }
+    public void tickIncubation(int amount) { incubationTicksRemaining = Math.max(0, incubationTicksRemaining - amount); }
     public void tickInfection() { if (ticksRemaining > 0) ticksRemaining--; }
+    public void tickInfection(int amount) { ticksRemaining = Math.max(0, ticksRemaining - amount); }
     public void tickImmunity() { if (immunityTicksRemaining > 0) immunityTicksRemaining--; }
     public void tickSymptoms() { if (symptomTicksRemaining > 0) symptomTicksRemaining--; }
 
