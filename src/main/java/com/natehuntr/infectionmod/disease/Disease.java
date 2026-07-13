@@ -3,10 +3,13 @@ package com.natehuntr.infectionmod.disease;
 public record Disease(
         String id,
         String displayName,
-        float baseTransmissionRate,
-        float severity,
+        // For curve diseases (exposureHalfLifeSeconds > 0): asymptotic max cumulative P.
+        // For flat diseases (exposureHalfLifeSeconds == 0): per-second transmission probability.
+        float maxTransmissionRate,
+        float spawnInfectionChance,
         int incubationTicks,
         int durationTicks,
-        float postRecoveryImmunity,
-        int immunityDurationTicks
+        float caseFatalityRate,
+        int immunityDurationTicks,
+        int exposureHalfLifeSeconds
 ) {}

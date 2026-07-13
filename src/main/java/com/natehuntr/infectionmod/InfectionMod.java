@@ -4,6 +4,7 @@ import com.natehuntr.infectionmod.command.InfectionCommand;
 import com.natehuntr.infectionmod.disease.DiseaseRegistry;
 import com.natehuntr.infectionmod.infection.InfectionAttachments;
 import com.natehuntr.infectionmod.infection.InfectionManager;
+import com.natehuntr.infectionmod.item.InfectionItems;
 import com.natehuntr.infectionmod.network.InfectionSyncPayload;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -22,6 +23,7 @@ public class InfectionMod implements ModInitializer {
     @Override
     public void onInitialize() {
         DiseaseRegistry.init();
+        InfectionItems.init();
         InfectionAttachments.init();
         PayloadTypeRegistry.playS2C().register(InfectionSyncPayload.ID, InfectionSyncPayload.CODEC);
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
