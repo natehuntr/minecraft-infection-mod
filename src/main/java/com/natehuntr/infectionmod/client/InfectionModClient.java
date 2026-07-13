@@ -14,7 +14,9 @@ public class InfectionModClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(InfectionSyncPayload.ID,
                 (payload, context) -> context.client().execute(() -> {
                     InfectionHudOverlay.infected = payload.infected();
+                    InfectionHudOverlay.exposed = payload.exposed();
                     InfectionHudOverlay.diseaseId = payload.diseaseId();
+                    InfectionHudOverlay.incubationTicksRemaining = payload.incubationTicksRemaining();
                     InfectionHudOverlay.ticksRemaining = payload.ticksRemaining();
                     InfectionHudOverlay.permanentHeartsLost = payload.permanentHeartsLost();
                     InfectionHudOverlay.symptomIds = payload.symptomIds();

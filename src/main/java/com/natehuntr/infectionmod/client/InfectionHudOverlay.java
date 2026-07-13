@@ -16,7 +16,9 @@ import java.util.stream.Collectors;
 @Environment(EnvType.CLIENT)
 public final class InfectionHudOverlay {
     public static volatile boolean infected = false;
+    public static volatile boolean exposed = false;
     public static volatile String diseaseId = "";
+    public static volatile int incubationTicksRemaining = 0;
     public static volatile int ticksRemaining = 0;
     public static volatile int permanentHeartsLost = 0;
     public static volatile List<String> symptomIds = List.of();
@@ -36,7 +38,9 @@ public final class InfectionHudOverlay {
         context.getMatrices().push();
         context.getMatrices().translate(0, 0, 200);
 
-        if (infected) {
+        // Show temporary-loss hearts only while infectious (health penalty is active)
+        boolean infectious = infected && !exposed;
+        if (infectious) {
             int firstTempSlot = 10 - permanentHeartsLost - 2;
             for (int i = 0; i < 2; i++) {
                 context.drawGuiTexture(
@@ -66,17 +70,27 @@ public final class InfectionHudOverlay {
 
         Disease disease = DiseaseRegistry.get(diseaseId);
         String name = disease != null ? disease.displayName() : diseaseId;
-        int seconds = ticksRemaining / 20;
-        String timerStr = String.format("%d:%02d", seconds / 60, seconds % 60);
         int cx = context.getScaledWindowWidth() / 2;
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Infection: " + name), cx, 20, 0xFF5555);
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Clears in: " + timerStr), cx, 30, 0xFFAAAA);
 
-        if (!symptomIds.isEmpty() && symptomTicksRemaining > 0) {
-            String names = symptomIds.stream()
-                    .map(InfectionHudOverlay::symptomDisplayName)
-                    .collect(Collectors.joining(", "));
-            context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Symptoms: " + names), cx, 40, 0xFFAA00);
+        if (exposed) {
+            // Incubation phase — not yet symptomatic
+            int seconds = incubationTicksRemaining / 20;
+            String timerStr = String.format("%d:%02d", seconds / 60, seconds % 60);
+            context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Exposed: " + name), cx, 20, 0xFFAA55);
+            context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Infectious in: " + timerStr), cx, 30, 0xFFCC88);
+        } else {
+            // Infectious phase
+            int seconds = ticksRemaining / 20;
+            String timerStr = String.format("%d:%02d", seconds / 60, seconds % 60);
+            context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Infection: " + name), cx, 20, 0xFF5555);
+            context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Clears in: " + timerStr), cx, 30, 0xFFAAAA);
+
+            if (!symptomIds.isEmpty() && symptomTicksRemaining > 0) {
+                String names = symptomIds.stream()
+                        .map(InfectionHudOverlay::symptomDisplayName)
+                        .collect(Collectors.joining(", "));
+                context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Symptoms: " + names), cx, 40, 0xFFAA00);
+            }
         }
     }
 

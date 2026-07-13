@@ -6,7 +6,6 @@ import com.natehuntr.infectionmod.disease.DiseaseRegistry;
 import com.natehuntr.infectionmod.network.InfectionSyncPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -26,20 +25,12 @@ import java.util.Set;
 public final class InfectionManager {
     private static final double PROXIMITY_RADIUS = 3.0;
     private static final double PROXIMITY_RADIUS_MEDIUM = 6.0;
-    private static final float MEDIUM_TRANSMISSION_RATE = 0.05f;
     private static final float SPAWN_INFECTION_CHANCE = 0.05f;
     private static final int SYMPTOM_TICKS_MIN = 3600;
     private static final int SYMPTOM_TICKS_MAX = 24000;
     private static final List<String> SYMPTOM_IDS = List.of("slowness", "nausea", "weakness");
     private static final Identifier TEMP_HEALTH_ID =
             Identifier.of(InfectionMod.MOD_ID, "infection_health_penalty");
-
-    static final Set<EntityType<?>> RESERVOIR_HOSTS = Set.of(
-            EntityType.BAT, EntityType.PIG, EntityType.COW, EntityType.CHICKEN,
-            EntityType.SHEEP, EntityType.FOX, EntityType.WOLF, EntityType.CAT,
-            EntityType.VILLAGER, EntityType.HORSE, EntityType.DONKEY, EntityType.MULE,
-            EntityType.RABBIT
-    );
 
     private InfectionManager() {}
 
@@ -50,7 +41,18 @@ public final class InfectionManager {
 
     private static void tickPlayer(ServerWorld world, ServerPlayerEntity player) {
         InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
-        if (state.isInfected()) {
+
+        if (state.isExposed()) {
+            state.tickIncubation();
+            if (state.getIncubationTicksRemaining() <= 0) {
+                // Incubation just ended — become infectious
+                ensureHealthPenalty(player);
+                rollSymptoms(world, state);
+                syncToClient(player, state);
+            } else if (world.getTime() % 20 == 0) {
+                syncToClient(player, state);
+            }
+        } else if (state.isInfectious()) {
             state.tickInfection();
             state.tickSymptoms();
             if (state.getTicksRemaining() <= 0) {
@@ -64,7 +66,10 @@ public final class InfectionManager {
             }
         } else if (state.isImmune()) {
             state.tickImmunity();
-            if (state.getImmunityTicksRemaining() <= 0) { state.clearImmunity(); syncToClient(player, state); }
+            if (state.getImmunityTicksRemaining() <= 0) {
+                state.clearImmunity();
+                syncToClient(player, state);
+            }
         }
     }
 
@@ -73,7 +78,7 @@ public final class InfectionManager {
         for (ServerPlayerEntity player : world.getPlayers()) {
             world.getEntitiesByClass(LivingEntity.class,
                     player.getBoundingBox().expand(PROXIMITY_RADIUS_MEDIUM + 8),
-                    e -> isSusceptible(e) && isInfected(e)
+                    e -> isInfectious(e)
             ).forEach(sources::add);
         }
         for (LivingEntity source : sources) {
@@ -81,9 +86,13 @@ public final class InfectionManager {
             if (srcState == null) continue;
             Disease disease = DiseaseRegistry.get(srcState.getDiseaseId());
             if (disease == null) continue;
+
             List<LivingEntity> targets = world.getEntitiesByClass(LivingEntity.class,
                     source.getBoundingBox().expand(PROXIMITY_RADIUS_MEDIUM),
-                    t -> t != source && isSusceptible(t) && !isInfected(t) && !isImmune(t)
+                    t -> t != source
+                            && isTargetSusceptibleTo(t, disease)
+                            && !isInfected(t)
+                            && !isImmune(t)
             );
             for (LivingEntity target : targets) {
                 boolean contact = source.getBoundingBox().intersects(target.getBoundingBox());
@@ -94,7 +103,8 @@ public final class InfectionManager {
                 } else if (closeRange) {
                     chance = disease.baseTransmissionRate();
                 } else {
-                    chance = MEDIUM_TRANSMISSION_RATE;
+                    // Medium range: 1/6 of base rate, min 0.1%
+                    chance = Math.max(disease.baseTransmissionRate() / 6.0f, 0.001f);
                 }
                 if (world.getRandom().nextFloat() < chance) infect(target, disease);
             }
@@ -103,27 +113,41 @@ public final class InfectionManager {
 
     public static void infect(LivingEntity entity, Disease disease) {
         InfectionState state = entity.getAttachedOrCreate(InfectionAttachments.INFECTION);
-        state.infect(disease.id(), disease.durationTicks());
+        state.infect(disease.id(), disease.incubationTicks(), disease.durationTicks());
         if (entity instanceof ServerPlayerEntity player) {
-            ensureHealthPenalty(player);
-            rollSymptoms(player.getServerWorld(), state);
+            if (disease.incubationTicks() <= 0) {
+                ensureHealthPenalty(player);
+                rollSymptoms(player.getServerWorld(), state);
+            }
             syncToClient(player, state);
         }
     }
 
     private static void recover(ServerWorld world, ServerPlayerEntity player, InfectionState state) {
+        Disease disease = DiseaseRegistry.get(state.getDiseaseId());
+        float cfr = disease != null ? disease.caseFatalityRate() : 0f;
+
         removeHealthPenalty(player);
         for (String id : state.getActiveSymptomIds()) {
             RegistryEntry<StatusEffect> effect = effectForId(id);
             if (effect != null) player.removeStatusEffect(effect);
         }
+
+        if (cfr > 0 && world.getRandom().nextFloat() < cfr) {
+            // Fatal outcome — clear state before kill so respawn starts clean
+            state.clearInfection();
+            syncToClient(player, state);
+            player.damage(world, world.getDamageSources().generic(), Float.MAX_VALUE);
+            return;
+        }
+
+        // Survival — check for permanent heart loss
         double maxHealth = player.getAttributeValue(EntityAttributes.MAX_HEALTH);
         if (world.getRandom().nextFloat() < state.permanentLossChance() && maxHealth - 2.0 >= 8.0) {
             state.recordPermanentHeartLoss();
             applyPermanentLoss(player, state.getPermanentHeartsLost());
             if (player.getHealth() > player.getMaxHealth()) player.setHealth(player.getMaxHealth());
         }
-        Disease disease = DiseaseRegistry.get(state.getDiseaseId());
         state.recover(disease != null ? disease.immunityDurationTicks() : 0);
         syncToClient(player, state);
     }
@@ -187,7 +211,7 @@ public final class InfectionManager {
 
     public static void reapplyOnLogin(ServerPlayerEntity player) {
         InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
-        if (state.isInfected()) {
+        if (state.isInfectious()) {
             ensureHealthPenalty(player);
             applySymptomEffects(player, state);
         }
@@ -205,7 +229,9 @@ public final class InfectionManager {
     public static void syncToClient(ServerPlayerEntity player, InfectionState state) {
         ServerPlayNetworking.send(player, new InfectionSyncPayload(
                 state.isInfected(),
+                state.isExposed(),
                 state.getDiseaseId() != null ? state.getDiseaseId() : "",
+                state.getIncubationTicksRemaining(),
                 state.getTicksRemaining(),
                 state.getPermanentHeartsLost(),
                 state.getActiveSymptomIds(),
@@ -213,18 +239,38 @@ public final class InfectionManager {
         ));
     }
 
-    public static boolean isSusceptible(LivingEntity e) { return e instanceof PlayerEntity || RESERVOIR_HOSTS.contains(e.getType()); }
+    // Any entity that can contract at least one disease
+    public static boolean isSusceptible(LivingEntity e) {
+        return e instanceof PlayerEntity || DiseaseRegistry.getAllReservoirHosts().contains(e.getType());
+    }
+
+    // Whether a specific entity can host a specific disease
+    private static boolean isTargetSusceptibleTo(LivingEntity t, Disease disease) {
+        return t instanceof PlayerEntity || DiseaseRegistry.getReservoirHosts(disease.id()).contains(t.getType());
+    }
 
     public static void onEntityLoad(Entity entity, ServerWorld world) {
         if (!(entity instanceof LivingEntity living)) return;
-        if (!RESERVOIR_HOSTS.contains(living.getType())) return;
+        List<Disease> hostDiseases = DiseaseRegistry.getDiseasesForHost(living.getType());
+        if (hostDiseases.isEmpty()) return;
         if (living.getAttached(InfectionAttachments.INFECTION) != null) return;
         living.getAttachedOrCreate(InfectionAttachments.INFECTION);
         if (world.getRandom().nextFloat() < SPAWN_INFECTION_CHANCE) {
-            infect(living, DiseaseRegistry.CRIMSON_FEVER);
+            Disease disease = hostDiseases.get(world.getRandom().nextInt(hostDiseases.size()));
+            infect(living, disease);
         }
     }
 
-    private static boolean isInfected(LivingEntity e) { InfectionState s = e.getAttached(InfectionAttachments.INFECTION); return s != null && s.isInfected(); }
-    private static boolean isImmune(LivingEntity e) { InfectionState s = e.getAttached(InfectionAttachments.INFECTION); return s != null && s.isImmune(); }
+    private static boolean isInfected(LivingEntity e) {
+        InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
+        return s != null && s.isInfected();
+    }
+    private static boolean isInfectious(LivingEntity e) {
+        InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
+        return s != null && s.isInfectious();
+    }
+    private static boolean isImmune(LivingEntity e) {
+        InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
+        return s != null && s.isImmune();
+    }
 }

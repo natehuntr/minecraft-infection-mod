@@ -1,6 +1,8 @@
 package com.natehuntr.infectionmod.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.natehuntr.infectionmod.disease.Disease;
 import com.natehuntr.infectionmod.infection.InfectionAttachments;
 import com.natehuntr.infectionmod.infection.InfectionManager;
 import com.natehuntr.infectionmod.infection.InfectionState;
@@ -21,9 +23,21 @@ public final class InfectionCommand {
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(CommandManager.literal("infect")
                 .requires(src -> src.hasPermissionLevel(2))
-                .executes(ctx -> infectPlayer(ctx.getSource(), ctx.getSource().getPlayerOrThrow()))
+                .executes(ctx -> infectPlayer(ctx.getSource(), ctx.getSource().getPlayerOrThrow(),
+                        DiseaseRegistry.RESPIRATORY_FEVER.id()))
                 .then(CommandManager.argument("target", EntityArgumentType.player())
-                        .executes(ctx -> infectPlayer(ctx.getSource(), EntityArgumentType.getPlayer(ctx, "target")))
+                        .executes(ctx -> infectPlayer(ctx.getSource(),
+                                EntityArgumentType.getPlayer(ctx, "target"),
+                                DiseaseRegistry.RESPIRATORY_FEVER.id()))
+                        .then(CommandManager.argument("disease", StringArgumentType.word())
+                                .suggests((ctx, builder) -> {
+                                    DiseaseRegistry.getAll().forEach(d -> builder.suggest(d.id()));
+                                    return builder.buildFuture();
+                                })
+                                .executes(ctx -> infectPlayer(ctx.getSource(),
+                                        EntityArgumentType.getPlayer(ctx, "target"),
+                                        StringArgumentType.getString(ctx, "disease")))
+                        )
                 )
         );
 
@@ -41,9 +55,15 @@ public final class InfectionCommand {
         );
     }
 
-    private static int infectPlayer(ServerCommandSource source, ServerPlayerEntity player) {
-        InfectionManager.infect(player, DiseaseRegistry.CRIMSON_FEVER);
-        source.sendFeedback(() -> Text.literal("Infected " + player.getName().getString() + " with Crimson Fever"), false);
+    private static int infectPlayer(ServerCommandSource source, ServerPlayerEntity player, String diseaseId) {
+        Disease disease = DiseaseRegistry.get(diseaseId);
+        if (disease == null) {
+            source.sendFeedback(() -> Text.literal("Unknown disease: " + diseaseId), false);
+            return 0;
+        }
+        InfectionManager.infect(player, disease);
+        source.sendFeedback(() -> Text.literal("Infected " + player.getName().getString()
+                + " with " + disease.displayName()), false);
         return 1;
     }
 
@@ -81,9 +101,12 @@ public final class InfectionCommand {
             InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
             String name = e.getName().getString();
             String status;
-            if (s.isInfected()) {
+            if (s.isExposed()) {
+                int secs = s.getIncubationTicksRemaining() / 20;
+                status = "EXPOSED (" + s.getDiseaseId() + ") infectious in " + secs + "s";
+            } else if (s.isInfectious()) {
                 int secs = s.getTicksRemaining() / 20;
-                status = "INFECTED (" + s.getDiseaseId() + ") " + secs + "s remaining";
+                status = "INFECTIOUS (" + s.getDiseaseId() + ") " + secs + "s remaining";
             } else if (s.isImmune()) {
                 int secs = s.getImmunityTicksRemaining() / 20;
                 status = "IMMUNE " + secs + "s remaining";

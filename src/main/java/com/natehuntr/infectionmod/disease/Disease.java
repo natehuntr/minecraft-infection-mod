@@ -7,6 +7,6 @@ public record Disease(
         float severity,
         int incubationTicks,
         int durationTicks,
-        float postRecoveryImmunity,
+        float caseFatalityRate,
         int immunityDurationTicks
 ) {}
