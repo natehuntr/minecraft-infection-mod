@@ -8,9 +8,9 @@ public final class DiseaseRegistry {
     private static final Map<String, Disease> REGISTRY = new LinkedHashMap<>();
     private static final Map<String, Set<EntityType<?>>> RESERVOIR_HOST_MAP = new LinkedHashMap<>();
 
-    // R₀ 2.5 — COVID-like respiratory spread; all current animal hosts
-    public static final Disease RESPIRATORY_FEVER = register(
-            new Disease("respiratory_fever", "Respiratory Fever", 0.03f, 0.5f, 72000, 120000, 0.01f, 72000),
+    // R₀ 2.5 — COVID-like respiratory spread; broad animal reservoir
+    public static final Disease CRIMSON_FEVER = register(
+            new Disease("crimson_fever", "Crimson Fever", 0.03f, 0.5f, 72000, 120000, 0.01f, 72000),
             Set.of(EntityType.BAT, EntityType.PIG, EntityType.COW, EntityType.CHICKEN,
                    EntityType.SHEEP, EntityType.FOX, EntityType.WOLF, EntityType.CAT,
                    EntityType.VILLAGER, EntityType.HORSE, EntityType.DONKEY, EntityType.MULE,
@@ -21,12 +21,6 @@ public final class DiseaseRegistry {
     public static final Disease SCARLET_BLIGHT = register(
             new Disease("scarlet_blight", "Scarlet Blight", 0.90f, 0.8f, 120000, 168000, 0.002f, 2400000),
             Set.of(EntityType.VILLAGER)
-    );
-
-    // R₀ 1.3 — Influenza-like seasonal spread; pigs and poultry reservoir
-    public static final Disease FROST_SICKNESS = register(
-            new Disease("frost_sickness", "Frost Sickness", 0.20f, 0.4f, 24000, 72000, 0.005f, 24000),
-            Set.of(EntityType.PIG, EntityType.CHICKEN)
     );
 
     // R₀ 0.001 — Prion disease (CJD-like); near-zero airborne spread; cattle reservoir; 95% CFR

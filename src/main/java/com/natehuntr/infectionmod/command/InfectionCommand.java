@@ -24,11 +24,11 @@ public final class InfectionCommand {
         dispatcher.register(CommandManager.literal("infect")
                 .requires(src -> src.hasPermissionLevel(2))
                 .executes(ctx -> infectPlayer(ctx.getSource(), ctx.getSource().getPlayerOrThrow(),
-                        DiseaseRegistry.RESPIRATORY_FEVER.id()))
+                        DiseaseRegistry.CRIMSON_FEVER.id()))
                 .then(CommandManager.argument("target", EntityArgumentType.player())
                         .executes(ctx -> infectPlayer(ctx.getSource(),
                                 EntityArgumentType.getPlayer(ctx, "target"),
-                                DiseaseRegistry.RESPIRATORY_FEVER.id()))
+                                DiseaseRegistry.CRIMSON_FEVER.id()))
                         .then(CommandManager.argument("disease", StringArgumentType.word())
                                 .suggests((ctx, builder) -> {
                                     DiseaseRegistry.getAll().forEach(d -> builder.suggest(d.id()));
