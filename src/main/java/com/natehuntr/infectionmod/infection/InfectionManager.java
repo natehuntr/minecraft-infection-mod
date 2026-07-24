@@ -42,6 +42,10 @@ public final class InfectionManager {
     // Tracks non-player infected entities so they can be ticked each second
     private static final Set<UUID> infectedAnimalUUIDs = new HashSet<>();
 
+    // UUIDs of animals currently being killed by the disease (not by a player).
+    // Used to suppress the duplicate Infected Beef drop in onAnimalDeath.
+    private static final Set<UUID> pendingDiseaseDeath = new HashSet<>();
+
     // Accumulated effective exposure seconds per (source UUID : target UUID) pair.
     // Increments each second entities are in range (rate varies by proximity);
     // decays at 2× the base rate per second when out of range.
@@ -139,9 +143,12 @@ public final class InfectionManager {
         float cfr = disease != null ? disease.caseFatalityRate() : 0f;
 
         if (cfr > 0 && world.getRandom().nextFloat() < cfr) {
+            // Mark as disease-kill so onAnimalDeath doesn't double-drop infected meat.
+            // damage() fires death events synchronously, so remove immediately after.
+            pendingDiseaseDeath.add(animal.getUuid());
             dropInfectedMeat(world, animal, state.getDiseaseId());
-            // Kill with disease damage source; vanilla loot table still fires separately
             animal.damage(world, world.getDamageSources().generic(), Float.MAX_VALUE);
+            pendingDiseaseDeath.remove(animal.getUuid());
         } else {
             state.recover(disease != null ? disease.immunityDurationTicks() : 0);
         }
@@ -387,16 +394,32 @@ public final class InfectionManager {
 
     public static void onEntityLoad(Entity entity, ServerWorld world) {
         if (!(entity instanceof LivingEntity living)) return;
+        if (living instanceof ServerPlayerEntity) return;
         List<Disease> hostDiseases = DiseaseRegistry.getDiseasesForHost(living.getType());
         if (hostDiseases.isEmpty()) return;
-        if (living.getAttached(InfectionAttachments.INFECTION) != null) return;
+
+        // Re-register animals that already have a persisted infection state so their
+        // disease progression resumes after a chunk reload or server restart.
+        InfectionState existing = living.getAttached(InfectionAttachments.INFECTION);
+        if (existing != null) {
+            if (existing.isInfected()) infectedAnimalUUIDs.add(living.getUuid());
+            return;
+        }
+
         living.getAttachedOrCreate(InfectionAttachments.INFECTION);
         for (Disease disease : hostDiseases) {
             if (world.getRandom().nextFloat() < disease.spawnInfectionChance()) {
                 infect(living, disease);
-                break; // infect with at most one disease at spawn
+                break;
             }
         }
+    }
+
+    public static void onAnimalDeath(LivingEntity entity, ServerWorld world) {
+        if (pendingDiseaseDeath.contains(entity.getUuid())) return;
+        InfectionState state = entity.getAttached(InfectionAttachments.INFECTION);
+        if (state == null || !state.isInfectious()) return;
+        dropInfectedMeat(world, entity, state.getDiseaseId());
     }
 
     // -------------------------------------------------------------------------

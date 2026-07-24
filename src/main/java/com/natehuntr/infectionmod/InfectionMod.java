@@ -7,7 +7,9 @@ import com.natehuntr.infectionmod.infection.InfectionManager;
 import com.natehuntr.infectionmod.item.InfectionItems;
 import com.natehuntr.infectionmod.network.InfectionSyncPayload;
 import net.fabricmc.api.ModInitializer;
+import net.minecraft.server.world.ServerWorld;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -32,6 +34,10 @@ public class InfectionMod implements ModInitializer {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> InfectionManager.reapplyOnLogin(handler.player));
         ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> InfectionManager.handleRespawn(newPlayer, !alive));
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> InfectionManager.onEntityLoad(entity, world));
+        ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
+            if (entity.getWorld() instanceof ServerWorld serverWorld)
+                InfectionManager.onAnimalDeath(entity, serverWorld);
+        });
         LOGGER.info("Infection Mod initialized");
     }
 }
