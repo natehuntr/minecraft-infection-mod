@@ -3,6 +3,7 @@ package com.natehuntr.infectionmod.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.natehuntr.infectionmod.disease.Disease;
+import com.natehuntr.infectionmod.infection.AerosolTracker;
 import com.natehuntr.infectionmod.infection.EpidemicLog;
 import com.natehuntr.infectionmod.infection.InfectionAttachments;
 import com.natehuntr.infectionmod.infection.InfectionManager;
@@ -119,6 +120,12 @@ public final class InfectionCommand {
                     live.susceptible(), live.exposed(), live.infectious(),
                     live.immune(), live.total())), false);
 
+            if (disease != null && disease.aerosolLifetimeSeconds() > 0) {
+                int blocks = AerosolTracker.size(player.getServerWorld());
+                source.sendFeedback(() -> Text.literal(
+                        "  Contaminated air: " + blocks + " blocks (all diseases)"), false);
+            }
+
             int[] curve = st.curve();
             int peak = 1;
             for (int c : curve) peak = Math.max(peak, c);
@@ -222,7 +229,10 @@ public final class InfectionCommand {
                 status = "EXPOSED (" + s.getDiseaseId() + ") infectious in " + secs + "s";
             } else if (s.isInfectious()) {
                 int secs = s.getTicksRemaining() / 20;
-                status = "INFECTIOUS (" + s.getDiseaseId() + ") " + secs + "s remaining";
+                // Distinguishing these matters: a prodromal host is spreading disease while
+                // looking healthy, and is invisible in-world by design.
+                status = (InfectionManager.isProdromal(s) ? "PRODROMAL (" : "INFECTIOUS (")
+                        + s.getDiseaseId() + ") " + secs + "s remaining";
             } else if (s.hasAnyImmunity()) {
                 // Immunity is per-disease now, so list each one rather than a single timer
                 StringBuilder sb = new StringBuilder("IMMUNE ");

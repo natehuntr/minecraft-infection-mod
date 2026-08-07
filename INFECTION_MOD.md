@@ -18,6 +18,8 @@ literature (R₀, CFR, incubation period, transmission curve).
 | Transmission curve | P(t) = 80% × (1 − e^−ᵗ⁄τ), τ = 60 s |
 | Incubation period | 72,000 ticks (3 MC days) |
 | Infectious duration | 120,000 ticks (5 MC days) |
+| Prodrome (contagious, invisible) | 24,000 ticks (1 MC day) |
+| Aerosol lifetime | 30 s |
 | Case fatality rate | 1% |
 | Immunity after recovery | 72,000 ticks (3 MC days) — waning |
 | Spawn infection chance | 5% per eligible mob |
@@ -31,6 +33,8 @@ literature (R₀, CFR, incubation period, transmission curve).
 | Transmission curve | P(t) = 99% × (1 − e^−ᵗ⁄τ), τ = 20 s |
 | Incubation period | 120,000 ticks (5 MC days) |
 | Infectious duration | 168,000 ticks (7 MC days) |
+| Prodrome (contagious, invisible) | 84,000 ticks (3.5 MC days — half the infectious window) |
+| Aerosol lifetime | 120 s |
 | Case fatality rate | 0.2% |
 | Immunity after recovery | 2,400,000 ticks (100 MC days) — near-lifelong |
 | Spawn infection chance | 5% per villager |
@@ -44,6 +48,8 @@ literature (R₀, CFR, incubation period, transmission curve).
 | Transmission (airborne) | Flat 0.1% per second (τ = 0 disables the curve) |
 | Incubation period | 120,000 ticks (5 MC days) |
 | Infectious duration | 240,000 ticks (10 MC days) |
+| Prodrome | None — visible as soon as infectious |
+| Aerosol lifetime | None (prions are not airborne) |
 | Case fatality rate | 95% |
 | Immunity after recovery | None |
 | Spawn infection chance | 1% per cow |
@@ -56,10 +62,17 @@ literature (R₀, CFR, incubation period, transmission curve).
 1. **Susceptible** — healthy, can be infected
 2. **Exposed (Incubating)** — carries the disease but is not yet contagious or symptomatic;
    HUD shows *"Exposed: [Disease]"* with a countdown to becoming infectious
-3. **Infectious** — contagious and symptomatic; health penalty active; HUD shows
-   *"Infection: [Disease]"* countdown
-4. **Recovered** — immune for that disease's immunity duration. The CFR roll happens here:
+3. **Prodrome** — contagious, health penalty active, but **no visible sign**. HUD shows
+   *"Unwell: [Disease] — Contagious, rash in M:SS"*. Other entities look completely healthy.
+4. **Rash** — contagious and visibly ill; particles and the villager texture appear. HUD
+   shows *"Infection: [Disease]"* countdown
+5. **Recovered** — immune for that disease's immunity duration. The CFR roll happens here:
    a fatal outcome kills, survival may cost a permanent heart.
+
+The prodrome is the point: **being contagious and looking contagious are different things.**
+A villager spreads Scarlet Blight for 3.5 MC days before anything shows, so an outbreak is
+already well underway by the time the first rash appears. `/infection-status` distinguishes
+`PRODROMAL` from `INFECTIOUS`; nothing in-world does.
 
 Immunity is tracked **per disease**. Recovering from Scarlet Blight grants no protection
 against Crimson Fever or Wasting Curse. A fatal case names the disease in the death message
@@ -97,6 +110,22 @@ than sustained ones. A pair that successfully transmits has its counter cleared.
 
 **Wasting Curse** uses a flat model (τ = 0): probability is `maxP × rate` per second,
 independent of exposure duration. Its real vector is food, not air.
+
+### Aerosol persistence
+
+Contagious hosts exhale into the block they occupy once a second, and that block stays
+infectious for the disease's aerosol lifetime after they leave — so a room can infect you
+when nobody is in it. Targets sample the 3×3×3 around themselves and take the freshest
+contamination found.
+
+Freshness decays linearly from deposit to expiry and is used directly as the accumulation
+rate, so air just breathed is as dangerous as standing beside the host, fading to nothing as
+it settles. Aerosol exposure runs through the same saturation curve, keyed per
+(disease, target) rather than (source, target) — the host may be long gone, or dead. Their
+UUID rides along on the cloud only so the case can still be attributed in the epidemic log.
+
+Scarlet Blight's 120 s comes from measles staying airborne roughly two real hours, which is
+about 100 s once compressed into Minecraft's 20-minute day.
 
 Eligible targets are players (any disease) and that disease's reservoir hosts. Spread is
 bidirectional: player→animal, animal→player, animal→animal.
@@ -226,7 +255,6 @@ Player: perm hearts lost: 2
 - Transmission is saturated: at close range ~84 seconds of contact is already a 97.5%
   infection chance for Scarlet Blight, so proximity and duration barely discriminate and
   quarantine is close to a no-op. Needs re-tuning against measured R.
-- No prodrome stage — real measles is contagious for days *before* the rash appears, which
-  is the main reason it spreads as well as it does.
-- No aerosol persistence — measles lingers in a room for up to two hours after the infected
-  person leaves; here a source must be physically present.
+- Immunity is all-or-nothing per disease; no partial or waning protection.
+- Aerosol is tracked per block with a hard cap of 20,000 blocks per dimension. A very large
+  outbreak will silently stop depositing past that ceiling.

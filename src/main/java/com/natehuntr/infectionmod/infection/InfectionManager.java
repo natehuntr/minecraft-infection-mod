@@ -99,7 +99,7 @@ public final class InfectionManager {
         for (ServerPlayerEntity player : world.getPlayers()) {
             List<Integer> ids = new ArrayList<>();
             for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class,
-                    player.getBoundingBox().expand(128.0), InfectionManager::showsRash)) {
+                    player.getBoundingBox().expand(128.0), InfectionManager::villagerShowsRash)) {
                 ids.add(e.getId());
             }
             ServerPlayNetworking.send(player, new VillagerInfectionPayload(ids));
@@ -107,13 +107,30 @@ public final class InfectionManager {
     }
 
     /**
-     * Only Scarlet Blight, and only once infectious — an incubating villager is not yet
-     * contagious and must not be identifiable on sight.
+     * Whether a visible sign should be showing.
+     *
+     * Not the same as being contagious: during the prodrome a host is spreading disease but
+     * looks completely healthy, which is exactly why measles is hard to contain. Contagious
+     * begins at {@code isInfectious()}; visible begins {@code prodromeTicks} later.
      */
-    private static boolean showsRash(LivingEntity e) {
+    public static boolean showsRash(InfectionState state) {
+        if (state == null || !state.isInfectious()) return false;
+        Disease disease = DiseaseRegistry.get(state.getDiseaseId());
+        if (disease == null) return false;
+        if (disease.prodromeTicks() <= 0) return true;
+        return state.getTicksRemaining() <= disease.rashOnsetTicks();
+    }
+
+    /** Contagious but not yet visibly ill. */
+    public static boolean isProdromal(InfectionState state) {
+        return state != null && state.isInfectious() && !showsRash(state);
+    }
+
+    /** Villager texture swap: Scarlet Blight only, and only once the rash has appeared. */
+    private static boolean villagerShowsRash(LivingEntity e) {
         if (e.getType() != EntityType.VILLAGER) return false;
         InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
-        return s != null && s.isInfectious() && "scarlet_blight".equals(s.getDiseaseId());
+        return s != null && "scarlet_blight".equals(s.getDiseaseId()) && showsRash(s);
     }
 
     // -------------------------------------------------------------------------
@@ -139,7 +156,9 @@ public final class InfectionManager {
                 recoverPlayer(world, player, state);
             } else {
                 ensureHealthPenalty(player);
-                if (world.getTime() % 10 == 0) spawnDiseaseParticles(world, player, state.getDiseaseId());
+                if (world.getTime() % 10 == 0 && showsRash(state)) {
+                    spawnDiseaseParticles(world, player, state.getDiseaseId());
+                }
                 if (world.getTime() % 20 == 0) {
                     applySymptomEffects(player, state);
                     syncToClient(player, state);
@@ -189,7 +208,7 @@ public final class InfectionManager {
             // Advance incubation by one second (20 ticks) per call
             state.tickIncubation(20);
         } else if (state.isInfectious()) {
-            spawnDiseaseParticles(world, animal, state.getDiseaseId());
+            if (showsRash(state)) spawnDiseaseParticles(world, animal, state.getDiseaseId());
             state.tickInfection(20);
             if (state.getTicksRemaining() <= 0) {
                 recoverAnimal(world, animal, state);
@@ -300,7 +319,18 @@ public final class InfectionManager {
                     exposureCounters.remove(key);
                 }
             }
+
+            // Exhale into the block being occupied, so the space stays infectious after
+            // this host moves on. Deposited during prodrome too, which is the point:
+            // a villager who looks perfectly healthy is seeding rooms.
+            if (disease.aerosolLifetimeSeconds() > 0) {
+                AerosolTracker.deposit(world, source.getBlockPos(), disease.id(),
+                        source.getUuid(), disease.aerosolLifetimeSeconds());
+            }
         }
+
+        spreadViaAerosol(world, activeThisSecond);
+        AerosolTracker.tick(world);
 
         // Decay counters for pairs not in range this second (2× base rate per second)
         exposureCounters.entrySet().removeIf(entry -> {
@@ -310,6 +340,47 @@ public final class InfectionManager {
             entry.setValue(decayed);
             return false;
         });
+    }
+
+    /**
+     * Exposure from contaminated air, with no infectious entity present.
+     *
+     * Runs through the same saturation curve as direct contact, keyed per (disease, target)
+     * rather than per (source, target) — the host that exhaled may be long gone, or dead.
+     * Its UUID rides along on the cloud purely so the case can still be attributed to a
+     * transmission chain in the epidemic log.
+     */
+    private static void spreadViaAerosol(ServerWorld world, Set<String> activeThisSecond) {
+        for (Entity entity : world.iterateEntities()) {
+            if (!(entity instanceof LivingEntity target) || target.isRemoved()) continue;
+            if (isInfected(target)) continue;
+
+            AerosolTracker.Hit hit = AerosolTracker.sample(world, target.getBlockPos());
+            if (hit == null) continue;
+
+            Disease disease = DiseaseRegistry.get(hit.diseaseId());
+            if (disease == null) continue;
+            if (!isTargetSusceptibleTo(target, disease)) continue;
+            if (isImmuneTo(target, disease.id())) continue;
+
+            // Fresh air is as infectious as standing beside the host and fades to nothing
+            // as the aerosol settles, so timing your entry into a room matters.
+            float rate = hit.freshness();
+            if (rate <= 0f) continue;
+
+            String key = "aerosol:" + disease.id() + ":" + target.getUuidAsString();
+            float prevAcc = exposureCounters.getOrDefault(key, 0.0f);
+            float newAcc = prevAcc + rate;
+            exposureCounters.put(key, newAcc);
+            activeThisSecond.add(key);
+
+            float chance = transmissionChance(disease, prevAcc, newAcc, rate);
+            if (world.getRandom().nextFloat() < chance) {
+                Entity origin = hit.source() == null ? null : world.getEntity(hit.source());
+                infect(target, disease, origin instanceof LivingEntity le ? le : null);
+                exposureCounters.remove(key);
+            }
+        }
     }
 
     private static float transmissionChance(Disease disease, float prevAcc, float newAcc, float rate) {

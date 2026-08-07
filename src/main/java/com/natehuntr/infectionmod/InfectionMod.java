@@ -2,6 +2,7 @@ package com.natehuntr.infectionmod;
 
 import com.natehuntr.infectionmod.command.InfectionCommand;
 import com.natehuntr.infectionmod.disease.DiseaseRegistry;
+import com.natehuntr.infectionmod.infection.AerosolTracker;
 import com.natehuntr.infectionmod.infection.InfectionAttachments;
 import com.natehuntr.infectionmod.infection.InfectionManager;
 import com.natehuntr.infectionmod.item.InfectionItems;
@@ -13,6 +14,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -40,6 +42,9 @@ public class InfectionMod implements ModInitializer {
             if (entity.getWorld() instanceof ServerWorld serverWorld)
                 InfectionManager.onAnimalDeath(entity, serverWorld);
         });
+        // Block positions only mean anything within one world; keeping them would
+        // let contaminated air from a previous save infect people in the next.
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> AerosolTracker.clear());
         LOGGER.info("Infection Mod initialized");
     }
 }

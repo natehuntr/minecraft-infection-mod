@@ -79,11 +79,28 @@ public final class InfectionHudOverlay {
             context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Exposed: " + name), cx, 20, 0xFFAA55);
             context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Infectious in: " + timerStr), cx, 30, 0xFFCC88);
         } else {
-            // Infectious phase
-            int seconds = ticksRemaining / 20;
-            String timerStr = String.format("%d:%02d", seconds / 60, seconds % 60);
-            context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Infection: " + name), cx, 20, 0xFF5555);
-            context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Clears in: " + timerStr), cx, 30, 0xFFAAAA);
+            // Contagious. Derived the same way the server does it, from the disease's
+            // prodrome length, so no extra field is needed on the sync payload.
+            boolean rash = disease == null
+                    || disease.prodromeTicks() <= 0
+                    || ticksRemaining <= disease.rashOnsetTicks();
+
+            if (!rash) {
+                // Prodrome — already spreading it, with nothing yet to see
+                int toRash = (ticksRemaining - disease.rashOnsetTicks()) / 20;
+                String rashTimer = String.format("%d:%02d", toRash / 60, toRash % 60);
+                context.drawCenteredTextWithShadow(client.textRenderer,
+                        Text.literal("Unwell: " + name), cx, 20, 0xFFCC44);
+                context.drawCenteredTextWithShadow(client.textRenderer,
+                        Text.literal("Contagious — rash in: " + rashTimer), cx, 30, 0xFFDD88);
+            } else {
+                int seconds = ticksRemaining / 20;
+                String timerStr = String.format("%d:%02d", seconds / 60, seconds % 60);
+                context.drawCenteredTextWithShadow(client.textRenderer,
+                        Text.literal("Infection: " + name), cx, 20, 0xFF5555);
+                context.drawCenteredTextWithShadow(client.textRenderer,
+                        Text.literal("Clears in: " + timerStr), cx, 30, 0xFFAAAA);
+            }
 
             if (!symptomIds.isEmpty() && symptomTicksRemaining > 0) {
                 String names = symptomIds.stream()
