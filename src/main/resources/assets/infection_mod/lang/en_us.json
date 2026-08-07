@@ -1,3 +1,7 @@
 {
-  "item.infection_mod.infected_beef": "Infected Beef"
+  "item.infection_mod.infected_beef": "Infected Beef",
+
+  "death.attack.infection_mod.crimson_fever": "%1$s succumbed to Crimson Fever",
+  "death.attack.infection_mod.scarlet_blight": "%1$s succumbed to Scarlet Blight",
+  "death.attack.infection_mod.wasting_curse": "%1$s wasted away"
 }

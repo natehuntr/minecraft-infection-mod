@@ -138,7 +138,7 @@ All commands require operator permission (level 2).
 | Command | Description |
 |---|---|
 | `/infect [player] [disease]` | Infects yourself or a named player with the specified disease (defaults to `respiratory_fever`) |
-| `/recover [player]` | Clears an active infection from yourself or a named player |
+| `/recover [targets]` | Clears active infections from any entity selector |
 | `/infection-status` | Lists all infected, immune, or permanently-damaged entities within 50 blocks |
 | `/infection-stats [disease]` | Epidemic report: case counts, observed R, outcomes, live S/E/I/R, and a per-MC-day case curve |
 | `/infection-stats reset` | Clears the epidemic log |
