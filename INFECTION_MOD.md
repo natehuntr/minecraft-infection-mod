@@ -174,10 +174,29 @@ reconstructable) and every resolved case. `/infection-stats` turns that into:
 The log is in-memory and clears on server restart — an epidemic is something you observe
 within a session.
 
-Infectious entities emit a visible particle signature: red spores for Scarlet Blight (the
-rash), sneeze puffs for Crimson Fever, ash for Wasting Curse. Airborne diseases also emit
-an occasional sneeze at head height. Exposed (incubating) entities emit nothing — they are
-not yet contagious and should not be identifiable on sight.
+## Seeing Infection
+
+Visible signs are **Scarlet Blight only** — its rash is the one disease whose real-world
+signature is something you can spot across a room. Crimson Fever and Wasting Curse are
+invisible, and have to be found with `/infection-status` or inferred from their effects.
+
+- **Particles** — crimson spores across the body, plus an occasional sneeze at head height
+- **Villager texture** — infected villagers swap to a diseased skin
+  (`assets/infection_mod/textures/entity/villager/infected_villager.png`). The profession
+  and biome clothing overlays are separate feature renderers and still draw on top, so an
+  infected farmer still reads as a farmer.
+
+Both appear only once an entity is **infectious**. Incubating entities look completely
+normal — they are not yet contagious, and should not be identifiable on sight. When the
+prodrome stage is added, the rash will begin at rash onset rather than at infectiousness,
+opening the window where a villager is spreading disease while still looking healthy.
+
+Since 1.21.2 a renderer no longer receives the entity in `getTexture` — only a render
+state. Rather than mixin into the vanilla state class, `InfectedVillagerRenderer` subclasses
+the villager renderer and overrides `createRenderState()` covariantly to supply an extended
+state carrying one extra flag. `updateRenderState` still receives the entity, so that is
+where the flag is read across. Which villagers are diseased is pushed to clients once a
+second by `VillagerInfectionPayload` as a self-correcting snapshot.
 
 ---
 

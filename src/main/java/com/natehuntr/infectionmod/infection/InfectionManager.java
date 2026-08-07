@@ -5,6 +5,7 @@ import com.natehuntr.infectionmod.disease.Disease;
 import com.natehuntr.infectionmod.disease.DiseaseRegistry;
 import com.natehuntr.infectionmod.item.InfectionItems;
 import com.natehuntr.infectionmod.network.InfectionSyncPayload;
+import com.natehuntr.infectionmod.network.VillagerInfectionPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
@@ -68,7 +69,34 @@ public final class InfectionManager {
         if (world.getTime() % 20 == 0) {
             spreadDisease(world);
             tickAnimals(world);
+            syncVillagerAppearance(world);
         }
+    }
+
+    /**
+     * Tells each player which nearby villagers are visibly diseased, so the client can swap
+     * their texture. Radius comfortably exceeds entity tracking range — a villager the
+     * client cannot see costs one varint and saves a pop-in when it comes into view.
+     */
+    private static void syncVillagerAppearance(ServerWorld world) {
+        for (ServerPlayerEntity player : world.getPlayers()) {
+            List<Integer> ids = new ArrayList<>();
+            for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class,
+                    player.getBoundingBox().expand(128.0), InfectionManager::showsRash)) {
+                ids.add(e.getId());
+            }
+            ServerPlayNetworking.send(player, new VillagerInfectionPayload(ids));
+        }
+    }
+
+    /**
+     * Only Scarlet Blight, and only once infectious — an incubating villager is not yet
+     * contagious and must not be identifiable on sight.
+     */
+    private static boolean showsRash(LivingEntity e) {
+        if (e.getType() != EntityType.VILLAGER) return false;
+        InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
+        return s != null && s.isInfectious() && "scarlet_blight".equals(s.getDiseaseId());
     }
 
     // -------------------------------------------------------------------------
@@ -154,9 +182,12 @@ public final class InfectionManager {
         }
     }
 
-    /** Renders the visible sign of infection across the entity's body. */
+    /**
+     * Renders the visible sign of infection. Scarlet Blight only — its rash is the one
+     * disease whose real-world signature is something you can see across a room.
+     */
     private static void spawnDiseaseParticles(ServerWorld world, LivingEntity entity, String diseaseId) {
-        if (diseaseId == null) return;
+        if (!"scarlet_blight".equals(diseaseId)) return;
         Box box = entity.getBoundingBox();
         double cx = (box.minX + box.maxX) / 2.0;
         double cy = (box.minY + box.maxY) / 2.0;
