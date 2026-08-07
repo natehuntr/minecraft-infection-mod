@@ -140,6 +140,8 @@ All commands require operator permission (level 2).
 | `/infect [player] [disease]` | Infects yourself or a named player with the specified disease (defaults to `respiratory_fever`) |
 | `/recover [player]` | Clears an active infection from yourself or a named player |
 | `/infection-status` | Lists all infected, immune, or permanently-damaged entities within 50 blocks |
+| `/infection-stats [disease]` | Epidemic report: case counts, observed R, outcomes, live S/E/I/R, and a per-MC-day case curve |
+| `/infection-stats reset` | Clears the epidemic log |
 
 Disease IDs for `/infect`: `respiratory_fever`, `scarlet_blight`, `frost_sickness`, `wasting_curse`
 
@@ -151,6 +153,31 @@ Villager: INFECTIOUS (scarlet_blight) 12340s remaining
 Sheep: IMMUNE 4821s remaining
 Player: perm hearts lost: 2
 ```
+
+---
+
+## Measuring an Outbreak
+
+`EpidemicLog` records every infection (with its source, so transmission chains are
+reconstructable) and every resolved case. `/infection-stats` turns that into:
+
+- **Cases** — total, split into index cases (spawn-seeded or `/infect`) and secondary
+  cases (caught from another entity)
+- **Observed R** — mean secondary infections per case, counted **only over cases whose
+  infectious period has finished**. Including still-infectious cases would drag the mean
+  down every tick and never settle. Reads `n/a` until the first case resolves.
+- **Live S/E/I/R** — current susceptible / exposed / infectious / immune counts across
+  loaded chunks for that disease's eligible population
+- **Case curve** — infections per MC day as a histogram, so you can see whether an
+  outbreak is climbing, peaking, or burnt out
+
+The log is in-memory and clears on server restart — an epidemic is something you observe
+within a session.
+
+Infectious entities emit a visible particle signature: red spores for Scarlet Blight (the
+rash), sneeze puffs for Crimson Fever, ash for Wasting Curse. Airborne diseases also emit
+an occasional sneeze at head height. Exposed (incubating) entities emit nothing — they are
+not yet contagious and should not be identifiable on sight.
 
 ---
 
