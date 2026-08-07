@@ -433,21 +433,51 @@ public final class InfectionManager {
     // Login / respawn
     // -------------------------------------------------------------------------
 
+    /**
+     * Reconciles a player's attributes with their infection state, in BOTH directions.
+     *
+     * The else-branch matters: without it any caller that clears infection without also
+     * dropping the modifier (notably /recover) leaves a permanent -4 MAX_HEALTH applied,
+     * so the player silently keeps 8 hearts forever and re-infecting appears to hand back
+     * two hearts that were never lost.
+     */
     public static void reapplyOnLogin(ServerPlayerEntity player) {
         InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
         if (state.isInfectious()) {
             ensureHealthPenalty(player);
             applySymptomEffects(player, state);
+        } else {
+            removeHealthPenalty(player);
         }
         applyPermanentLoss(player, state.getPermanentHeartsLost());
+        syncToClient(player, state);
+    }
+
+    /**
+     * Immediately ends an infection, undoing everything it applied. Used by /recover.
+     *
+     * Clearing InfectionState alone is not enough: the max-health modifier and any active
+     * symptom effects live on the player, not in the state, and would outlive the disease.
+     */
+    public static void cure(ServerPlayerEntity player) {
+        InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
+        removeHealthPenalty(player);
+        for (String id : state.getActiveSymptomIds()) {
+            RegistryEntry<StatusEffect> effect = effectForId(id);
+            if (effect != null) player.removeStatusEffect(effect);
+        }
+        state.clearInfection();
+        if (player.getHealth() > player.getMaxHealth()) player.setHealth(player.getMaxHealth());
         syncToClient(player, state);
     }
 
     public static void handleRespawn(ServerPlayerEntity player, boolean fromDeath) {
         InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
         if (fromDeath) state.clearInfection();
-        applyPermanentLoss(player, state.getPermanentHeartsLost());
-        syncToClient(player, state);
+        // Reconcile rather than only re-applying permanent loss: this event also fires for
+        // a non-death respawn (returning from the End), which hands over a fresh player
+        // entity whose temporary modifier is gone while the infection is still running.
+        reapplyOnLogin(player);
     }
 
     // -------------------------------------------------------------------------

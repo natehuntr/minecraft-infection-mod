@@ -152,8 +152,7 @@ public final class InfectionCommand {
             source.sendFeedback(() -> Text.literal(player.getName().getString() + " is not infected"), false);
             return 0;
         }
-        state.clearInfection();
-        InfectionManager.reapplyOnLogin(player);
+        InfectionManager.cure(player);
         source.sendFeedback(() -> Text.literal("Cleared infection from " + player.getName().getString()), false);
         return 1;
     }
