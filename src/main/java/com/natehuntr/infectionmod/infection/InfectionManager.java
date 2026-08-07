@@ -5,6 +5,7 @@ import com.natehuntr.infectionmod.disease.Disease;
 import com.natehuntr.infectionmod.disease.DiseaseRegistry;
 import com.natehuntr.infectionmod.item.InfectionItems;
 import com.natehuntr.infectionmod.network.InfectionSyncPayload;
+import com.natehuntr.infectionmod.network.VillagerInfectionPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
@@ -16,15 +17,22 @@ import net.minecraft.entity.effect.StatusEffect;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.damage.DamageType;
 import net.minecraft.item.ItemStack;
+import net.minecraft.particle.ParticleEffect;
+import net.minecraft.particle.ParticleTypes;
+import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.Box;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,8 +47,32 @@ public final class InfectionManager {
     private static final Identifier TEMP_HEALTH_ID =
             Identifier.of(InfectionMod.MOD_ID, "infection_health_penalty");
 
-    // Tracks non-player infected entities so they can be ticked each second
-    private static final Set<UUID> infectedAnimalUUIDs = new HashSet<>();
+    /**
+     * Damage source naming the disease, so a fatality reads "Steve succumbed to Scarlet
+     * Blight" rather than a bare "Steve died". Each disease has a damage_type JSON under
+     * data/infection_mod/damage_type/ whose message_id resolves the lang key.
+     */
+    private static DamageSource diseaseDamage(ServerWorld world, String diseaseId) {
+        Registry<DamageType> registry = world.getRegistryManager().getOrThrow(RegistryKeys.DAMAGE_TYPE);
+        RegistryKey<DamageType> key =
+                RegistryKey.of(RegistryKeys.DAMAGE_TYPE, Identifier.of(InfectionMod.MOD_ID, diseaseId));
+        return new DamageSource(registry.getEntry(registry.getValueOrThrow(key)));
+    }
+
+    // Visible sign of an active infection, one signature per disease. These are all
+    // SimpleParticleTypes so they need no constructor args and are stable across versions.
+    private static ParticleEffect rashParticle(String diseaseId) {
+        return switch (diseaseId) {
+            case "scarlet_blight" -> ParticleTypes.CRIMSON_SPORE;   // red speckle — the rash
+            case "crimson_fever"  -> ParticleTypes.SNEEZE;          // respiratory droplets
+            case "wasting_curse"  -> ParticleTypes.ASH;             // grey, wasting away
+            default               -> ParticleTypes.SNEEZE;
+        };
+    }
+
+    // UUIDs of animals currently being killed by the disease (not by a player).
+    // Used to suppress the duplicate Infected Beef drop in onAnimalDeath.
+    private static final Set<UUID> pendingDiseaseDeath = new HashSet<>();
 
     // Accumulated effective exposure seconds per (source UUID : target UUID) pair.
     // Increments each second entities are in range (rate varies by proximity);
@@ -54,7 +86,51 @@ public final class InfectionManager {
         if (world.getTime() % 20 == 0) {
             spreadDisease(world);
             tickAnimals(world);
+            syncVillagerAppearance(world);
         }
+    }
+
+    /**
+     * Tells each player which nearby villagers are visibly diseased, so the client can swap
+     * their texture. Radius comfortably exceeds entity tracking range — a villager the
+     * client cannot see costs one varint and saves a pop-in when it comes into view.
+     */
+    private static void syncVillagerAppearance(ServerWorld world) {
+        for (ServerPlayerEntity player : world.getPlayers()) {
+            List<Integer> ids = new ArrayList<>();
+            for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class,
+                    player.getBoundingBox().expand(128.0), InfectionManager::villagerShowsRash)) {
+                ids.add(e.getId());
+            }
+            ServerPlayNetworking.send(player, new VillagerInfectionPayload(ids));
+        }
+    }
+
+    /**
+     * Whether a visible sign should be showing.
+     *
+     * Not the same as being contagious: during the prodrome a host is spreading disease but
+     * looks completely healthy, which is exactly why measles is hard to contain. Contagious
+     * begins at {@code isInfectious()}; visible begins {@code prodromeTicks} later.
+     */
+    public static boolean showsRash(InfectionState state) {
+        if (state == null || !state.isInfectious()) return false;
+        Disease disease = DiseaseRegistry.get(state.getDiseaseId());
+        if (disease == null) return false;
+        if (disease.prodromeTicks() <= 0) return true;
+        return state.getTicksRemaining() <= disease.rashOnsetTicks();
+    }
+
+    /** Contagious but not yet visibly ill. */
+    public static boolean isProdromal(InfectionState state) {
+        return state != null && state.isInfectious() && !showsRash(state);
+    }
+
+    /** Villager texture swap: Scarlet Blight only, and only once the rash has appeared. */
+    private static boolean villagerShowsRash(LivingEntity e) {
+        if (e.getType() != EntityType.VILLAGER) return false;
+        InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
+        return s != null && "scarlet_blight".equals(s.getDiseaseId()) && showsRash(s);
     }
 
     // -------------------------------------------------------------------------
@@ -80,17 +156,16 @@ public final class InfectionManager {
                 recoverPlayer(world, player, state);
             } else {
                 ensureHealthPenalty(player);
+                if (world.getTime() % 10 == 0 && showsRash(state)) {
+                    spawnDiseaseParticles(world, player, state.getDiseaseId());
+                }
                 if (world.getTime() % 20 == 0) {
                     applySymptomEffects(player, state);
                     syncToClient(player, state);
                 }
             }
-        } else if (state.isImmune()) {
-            state.tickImmunity();
-            if (state.getImmunityTicksRemaining() <= 0) {
-                state.clearImmunity();
-                syncToClient(player, state);
-            }
+        } else if (state.hasAnyImmunity()) {
+            if (state.tickImmunity()) syncToClient(player, state);
         }
     }
 
@@ -98,39 +173,69 @@ public final class InfectionManager {
     // Animal ticking — called once per second (every 20 game ticks)
     // -------------------------------------------------------------------------
 
+    /**
+     * Advances every infected non-player entity in this world by one second.
+     *
+     * Driven off the world's own entity list rather than a tracking set: END_WORLD_TICK
+     * fires once per dimension, so a set shared across worlds would see its members
+     * "missing" on every foreign dimension's pass. This also means state survives chunk
+     * reloads and server restarts for free — an entity resumes ticking as soon as its
+     * chunk is loaded, because being in the world IS the registration.
+     */
     private static void tickAnimals(ServerWorld world) {
-        Iterator<UUID> iter = infectedAnimalUUIDs.iterator();
-        while (iter.hasNext()) {
-            UUID uuid = iter.next();
-            Entity entity = world.getEntity(uuid);
-            if (!(entity instanceof LivingEntity living) || living.isRemoved()) {
-                iter.remove();
-                continue;
-            }
-            if (living instanceof ServerPlayerEntity) {
-                iter.remove();
-                continue;
-            }
+        // Collected first: recoverAnimal can kill an entity, and mutating the entity
+        // list while iterating it is not safe.
+        List<LivingEntity> active = new ArrayList<>();
+        for (Entity entity : world.iterateEntities()) {
+            if (!(entity instanceof LivingEntity living)) continue;
+            if (living instanceof ServerPlayerEntity || living.isRemoved()) continue;
             InfectionState state = living.getAttached(InfectionAttachments.INFECTION);
-            if (state == null || !state.isInfected()) {
-                iter.remove();
-                continue;
-            }
-            tickAnimal(world, living, state, iter);
+            // Immune-but-healthy entities are included so their immunity actually expires;
+            // collecting only infected ones left recovered animals immune forever.
+            if (state == null || (!state.isInfected() && !state.hasAnyImmunity())) continue;
+            active.add(living);
+        }
+
+        for (LivingEntity living : active) {
+            InfectionState state = living.getAttached(InfectionAttachments.INFECTION);
+            if (state == null) continue;   // may have changed above
+            tickAnimal(world, living, state);
         }
     }
 
-    private static void tickAnimal(ServerWorld world, LivingEntity animal,
-                                   InfectionState state, Iterator<UUID> iter) {
+    private static void tickAnimal(ServerWorld world, LivingEntity animal, InfectionState state) {
         if (state.isExposed()) {
             // Advance incubation by one second (20 ticks) per call
             state.tickIncubation(20);
         } else if (state.isInfectious()) {
+            if (showsRash(state)) spawnDiseaseParticles(world, animal, state.getDiseaseId());
             state.tickInfection(20);
             if (state.getTicksRemaining() <= 0) {
                 recoverAnimal(world, animal, state);
-                iter.remove();
             }
+        } else {
+            state.tickImmunity(20);
+        }
+    }
+
+    /**
+     * Renders the visible sign of infection. Scarlet Blight only — its rash is the one
+     * disease whose real-world signature is something you can see across a room.
+     */
+    private static void spawnDiseaseParticles(ServerWorld world, LivingEntity entity, String diseaseId) {
+        if (!"scarlet_blight".equals(diseaseId)) return;
+        Box box = entity.getBoundingBox();
+        double cx = (box.minX + box.maxX) / 2.0;
+        double cy = (box.minY + box.maxY) / 2.0;
+        double cz = (box.minZ + box.maxZ) / 2.0;
+        double sx = (box.maxX - box.minX) / 2.0;
+        double sy = (box.maxY - box.minY) / 2.0;
+
+        world.spawnParticles(rashParticle(diseaseId), cx, cy, cz, 4, sx, sy, sx, 0.0);
+
+        // Occasional respiratory puff at head height for the airborne diseases
+        if (!"wasting_curse".equals(diseaseId) && world.getRandom().nextFloat() < 0.2f) {
+            world.spawnParticles(ParticleTypes.SNEEZE, cx, box.maxY - 0.2, cz, 2, 0.1, 0.05, 0.1, 0.02);
         }
     }
 
@@ -138,11 +243,17 @@ public final class InfectionManager {
         Disease disease = DiseaseRegistry.get(state.getDiseaseId());
         float cfr = disease != null ? disease.caseFatalityRate() : 0f;
 
+        String diseaseId = state.getDiseaseId();
         if (cfr > 0 && world.getRandom().nextFloat() < cfr) {
-            dropInfectedMeat(world, animal, state.getDiseaseId());
-            // Kill with disease damage source; vanilla loot table still fires separately
-            animal.damage(world, world.getDamageSources().generic(), Float.MAX_VALUE);
+            EpidemicLog.recordResolution(world.getTime(), diseaseId, animal, EpidemicLog.Outcome.DIED);
+            // Mark as disease-kill so onAnimalDeath doesn't double-drop infected meat.
+            // damage() fires death events synchronously, so remove immediately after.
+            pendingDiseaseDeath.add(animal.getUuid());
+            dropInfectedMeat(world, animal, diseaseId);
+            animal.damage(world, diseaseDamage(world, diseaseId), Float.MAX_VALUE);
+            pendingDiseaseDeath.remove(animal.getUuid());
         } else {
+            EpidemicLog.recordResolution(world.getTime(), diseaseId, animal, EpidemicLog.Outcome.RECOVERED);
             state.recover(disease != null ? disease.immunityDurationTicks() : 0);
         }
     }
@@ -161,12 +272,15 @@ public final class InfectionManager {
     // -------------------------------------------------------------------------
 
     private static void spreadDisease(ServerWorld world) {
-        Set<LivingEntity> sources = new HashSet<>();
-        for (ServerPlayerEntity player : world.getPlayers()) {
-            world.getEntitiesByClass(LivingEntity.class,
-                    player.getBoundingBox().expand(PROXIMITY_RADIUS_MEDIUM + 8),
-                    e -> isInfectious(e)
-            ).forEach(sources::add);
+        // Every infectious entity in loaded chunks is a source, not just those standing
+        // near a player. Gathering sources by player proximity confined transmission to a
+        // ~14 block bubble, so an outbreak froze the moment you walked away: infected
+        // villagers would tick all the way to recovery without infecting anyone, and no
+        // epidemic could ever burn through a village or reach herd immunity off-screen.
+        // Loaded chunks already bound the cost, and tickAnimals walks the same set.
+        List<LivingEntity> sources = new ArrayList<>();
+        for (Entity entity : world.iterateEntities()) {
+            if (entity instanceof LivingEntity living && isInfectious(living)) sources.add(living);
         }
 
         Set<String> activeThisSecond = new HashSet<>();
@@ -182,7 +296,7 @@ public final class InfectionManager {
                     t -> t != source
                             && isTargetSusceptibleTo(t, disease)
                             && !isInfected(t)
-                            && !isImmune(t)
+                            && !isImmuneTo(t, disease.id())
             );
             for (LivingEntity target : targets) {
                 boolean contact = source.getBoundingBox().intersects(target.getBoundingBox());
@@ -201,11 +315,22 @@ public final class InfectionManager {
 
                 float chance = transmissionChance(disease, prevAcc, newAcc, rate);
                 if (world.getRandom().nextFloat() < chance) {
-                    infect(target, disease);
+                    infect(target, disease, source);
                     exposureCounters.remove(key);
                 }
             }
+
+            // Exhale into the block being occupied, so the space stays infectious after
+            // this host moves on. Deposited during prodrome too, which is the point:
+            // a villager who looks perfectly healthy is seeding rooms.
+            if (disease.aerosolLifetimeSeconds() > 0) {
+                AerosolTracker.deposit(world, source.getBlockPos(), disease.id(),
+                        source.getUuid(), disease.aerosolLifetimeSeconds());
+            }
         }
+
+        spreadViaAerosol(world, activeThisSecond);
+        AerosolTracker.tick(world);
 
         // Decay counters for pairs not in range this second (2× base rate per second)
         exposureCounters.entrySet().removeIf(entry -> {
@@ -215,6 +340,47 @@ public final class InfectionManager {
             entry.setValue(decayed);
             return false;
         });
+    }
+
+    /**
+     * Exposure from contaminated air, with no infectious entity present.
+     *
+     * Runs through the same saturation curve as direct contact, keyed per (disease, target)
+     * rather than per (source, target) — the host that exhaled may be long gone, or dead.
+     * Its UUID rides along on the cloud purely so the case can still be attributed to a
+     * transmission chain in the epidemic log.
+     */
+    private static void spreadViaAerosol(ServerWorld world, Set<String> activeThisSecond) {
+        for (Entity entity : world.iterateEntities()) {
+            if (!(entity instanceof LivingEntity target) || target.isRemoved()) continue;
+            if (isInfected(target)) continue;
+
+            AerosolTracker.Hit hit = AerosolTracker.sample(world, target.getBlockPos());
+            if (hit == null) continue;
+
+            Disease disease = DiseaseRegistry.get(hit.diseaseId());
+            if (disease == null) continue;
+            if (!isTargetSusceptibleTo(target, disease)) continue;
+            if (isImmuneTo(target, disease.id())) continue;
+
+            // Fresh air is as infectious as standing beside the host and fades to nothing
+            // as the aerosol settles, so timing your entry into a room matters.
+            float rate = hit.freshness();
+            if (rate <= 0f) continue;
+
+            String key = "aerosol:" + disease.id() + ":" + target.getUuidAsString();
+            float prevAcc = exposureCounters.getOrDefault(key, 0.0f);
+            float newAcc = prevAcc + rate;
+            exposureCounters.put(key, newAcc);
+            activeThisSecond.add(key);
+
+            float chance = transmissionChance(disease, prevAcc, newAcc, rate);
+            if (world.getRandom().nextFloat() < chance) {
+                Entity origin = hit.source() == null ? null : world.getEntity(hit.source());
+                infect(target, disease, origin instanceof LivingEntity le ? le : null);
+                exposureCounters.remove(key);
+            }
+        }
     }
 
     private static float transmissionChance(Disease disease, float prevAcc, float newAcc, float rate) {
@@ -233,17 +399,25 @@ public final class InfectionManager {
     // Infection entry point
     // -------------------------------------------------------------------------
 
+    /** Index case — spawn-seeded or /infect, with no known source. */
     public static void infect(LivingEntity entity, Disease disease) {
+        infect(entity, disease, null);
+    }
+
+    public static void infect(LivingEntity entity, Disease disease, LivingEntity source) {
         InfectionState state = entity.getAttachedOrCreate(InfectionAttachments.INFECTION);
         state.infect(disease.id(), disease.incubationTicks(), disease.durationTicks());
+
+        if (entity.getWorld() instanceof ServerWorld sw) {
+            EpidemicLog.recordInfection(sw.getTime(), disease.id(), entity, source);
+        }
+
         if (entity instanceof ServerPlayerEntity player) {
             if (disease.incubationTicks() <= 0) {
                 ensureHealthPenalty(player);
                 rollSymptoms(player.getServerWorld(), state);
             }
             syncToClient(player, state);
-        } else {
-            infectedAnimalUUIDs.add(entity.getUuid());
         }
     }
 
@@ -261,12 +435,15 @@ public final class InfectionManager {
             if (effect != null) player.removeStatusEffect(effect);
         }
 
+        String diseaseId = state.getDiseaseId();
         if (cfr > 0 && world.getRandom().nextFloat() < cfr) {
+            EpidemicLog.recordResolution(world.getTime(), diseaseId, player, EpidemicLog.Outcome.DIED);
             state.clearInfection();
             syncToClient(player, state);
-            player.damage(world, world.getDamageSources().generic(), Float.MAX_VALUE);
+            player.damage(world, diseaseDamage(world, diseaseId), Float.MAX_VALUE);
             return;
         }
+        EpidemicLog.recordResolution(world.getTime(), diseaseId, player, EpidemicLog.Outcome.RECOVERED);
 
         double maxHealth = player.getAttributeValue(EntityAttributes.MAX_HEALTH);
         if (world.getRandom().nextFloat() < state.permanentLossChance() && maxHealth - 2.0 >= 8.0) {
@@ -347,21 +524,56 @@ public final class InfectionManager {
     // Login / respawn
     // -------------------------------------------------------------------------
 
+    /**
+     * Reconciles a player's attributes with their infection state, in BOTH directions.
+     *
+     * The else-branch matters: without it any caller that clears infection without also
+     * dropping the modifier (notably /recover) leaves a permanent -4 MAX_HEALTH applied,
+     * so the player silently keeps 8 hearts forever and re-infecting appears to hand back
+     * two hearts that were never lost.
+     */
     public static void reapplyOnLogin(ServerPlayerEntity player) {
         InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
         if (state.isInfectious()) {
             ensureHealthPenalty(player);
             applySymptomEffects(player, state);
+        } else {
+            removeHealthPenalty(player);
         }
         applyPermanentLoss(player, state.getPermanentHeartsLost());
         syncToClient(player, state);
     }
 
+    /**
+     * Immediately ends an infection, undoing everything it applied. Used by /recover.
+     *
+     * Clearing InfectionState alone is not enough: the max-health modifier and any active
+     * symptom effects live on the player, not in the state, and would outlive the disease.
+     */
+    public static void cure(LivingEntity entity) {
+        InfectionState state = entity.getAttachedOrCreate(InfectionAttachments.INFECTION);
+        if (entity instanceof ServerPlayerEntity player) {
+            removeHealthPenalty(player);
+            for (String id : state.getActiveSymptomIds()) {
+                RegistryEntry<StatusEffect> effect = effectForId(id);
+                if (effect != null) player.removeStatusEffect(effect);
+            }
+            state.clearInfection();
+            if (player.getHealth() > player.getMaxHealth()) player.setHealth(player.getMaxHealth());
+            syncToClient(player, state);
+        } else {
+            // Animals carry no attribute modifiers or status effects from the disease
+            state.clearInfection();
+        }
+    }
+
     public static void handleRespawn(ServerPlayerEntity player, boolean fromDeath) {
         InfectionState state = player.getAttachedOrCreate(InfectionAttachments.INFECTION);
         if (fromDeath) state.clearInfection();
-        applyPermanentLoss(player, state.getPermanentHeartsLost());
-        syncToClient(player, state);
+        // Reconcile rather than only re-applying permanent loss: this event also fires for
+        // a non-death respawn (returning from the End), which hands over a fresh player
+        // entity whose temporary modifier is gone while the infection is still running.
+        reapplyOnLogin(player);
     }
 
     // -------------------------------------------------------------------------
@@ -387,16 +599,66 @@ public final class InfectionManager {
 
     public static void onEntityLoad(Entity entity, ServerWorld world) {
         if (!(entity instanceof LivingEntity living)) return;
+        if (living instanceof ServerPlayerEntity) return;
         List<Disease> hostDiseases = DiseaseRegistry.getDiseasesForHost(living.getType());
         if (hostDiseases.isEmpty()) return;
+
+        // Only fresh spawns get a seeding roll. Anything with existing state has already
+        // had one, and resumes ticking on its own now that tickAnimals walks the world.
         if (living.getAttached(InfectionAttachments.INFECTION) != null) return;
+
         living.getAttachedOrCreate(InfectionAttachments.INFECTION);
+
+        // Newborns start susceptible. Seeding them would make breeding a source of new
+        // INFECTIONS, when births are the one mechanism that restores susceptibles to a
+        // village that has already burnt through an outbreak and gone immune.
+        if (living.isBaby()) return;
+
         for (Disease disease : hostDiseases) {
             if (world.getRandom().nextFloat() < disease.spawnInfectionChance()) {
                 infect(living, disease);
-                break; // infect with at most one disease at spawn
+                break;
             }
         }
+    }
+
+    public static void onAnimalDeath(LivingEntity entity, ServerWorld world) {
+        if (pendingDiseaseDeath.contains(entity.getUuid())) return;
+        InfectionState state = entity.getAttached(InfectionAttachments.INFECTION);
+        if (state == null || !state.isInfectious()) return;
+        dropInfectedMeat(world, entity, state.getDiseaseId());
+    }
+
+    // -------------------------------------------------------------------------
+    // Live population survey
+    // -------------------------------------------------------------------------
+
+    /** Current S/E/I/R counts across loaded chunks for one disease's eligible population. */
+    public record LiveCounts(int susceptible, int exposed, int infectious, int immune) {
+        public int total() { return susceptible + exposed + infectious + immune; }
+    }
+
+    public static LiveCounts countLive(ServerWorld world, String diseaseId) {
+        Set<EntityType<?>> hosts = DiseaseRegistry.getReservoirHosts(diseaseId);
+        int s = 0, e = 0, i = 0, r = 0;
+        for (Entity entity : world.iterateEntities()) {
+            if (!(entity instanceof LivingEntity living)) continue;
+            if (!(living instanceof PlayerEntity) && !hosts.contains(living.getType())) continue;
+
+            InfectionState st = living.getAttached(InfectionAttachments.INFECTION);
+            if (st == null) { s++; continue; }
+
+            if (st.isInfected() && diseaseId.equals(st.getDiseaseId())) {
+                if (st.isExposed()) e++; else i++;
+            } else if (st.isImmuneTo(diseaseId)) {
+                r++;
+            } else if (!st.isInfected()) {
+                s++;
+            }
+            // Entities infected with a DIFFERENT disease fall through deliberately:
+            // co-infection is blocked, so they are neither susceptible nor immune here.
+        }
+        return new LiveCounts(s, e, i, r);
     }
 
     // -------------------------------------------------------------------------
@@ -419,8 +681,8 @@ public final class InfectionManager {
         InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
         return s != null && s.isInfectious();
     }
-    private static boolean isImmune(LivingEntity e) {
+    private static boolean isImmuneTo(LivingEntity e, String diseaseId) {
         InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
-        return s != null && s.isImmune();
+        return s != null && s.isImmuneTo(diseaseId);
     }
 }
