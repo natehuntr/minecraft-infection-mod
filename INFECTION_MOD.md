@@ -186,5 +186,10 @@ not yet contagious and should not be identifiable on sight.
 - **Platform:** Fabric Loader 0.19.2, Fabric API 0.119.4+1.21.4, Minecraft 1.21.4
 - **Infection state** is stored per-entity using Fabric Data Attachments and persists to disk via a Codec
 - **Server-to-client sync** uses a custom `InfectionSyncPayload` packet sent every second while infected/exposed, and on state changes
-- Animal infection state is tracked in memory during a session; it persists across chunk reloads but is not currently synced to clients (no visual indicator on animals)
+- Animal infection state lives entirely in the entity's persisted attachment. `tickAnimals`
+  walks each world's own entity list rather than a tracking set, so being loaded *is* the
+  registration — progression survives chunk reloads and server restarts with no bookkeeping.
+  (A shared UUID set could not work here: `END_WORLD_TICK` fires once per dimension, so
+  every foreign dimension's pass would see the entity as missing.)
+- Animals are not synced to clients; their status is conveyed by particles, not a HUD
 - The incubation stage is tracked server-side per entity; animals in incubation are not yet contagious (they become a spread source only after incubation ends)

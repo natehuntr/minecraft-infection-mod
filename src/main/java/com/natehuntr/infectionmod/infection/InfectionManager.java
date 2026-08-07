@@ -27,7 +27,6 @@ import net.minecraft.util.math.Box;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,9 +51,6 @@ public final class InfectionManager {
             default               -> ParticleTypes.SNEEZE;
         };
     }
-
-    // Tracks non-player infected entities so they can be ticked each second
-    private static final Set<UUID> infectedAnimalUUIDs = new HashSet<>();
 
     // UUIDs of animals currently being killed by the disease (not by a player).
     // Used to suppress the duplicate Infected Beef drop in onAnimalDeath.
@@ -117,30 +113,35 @@ public final class InfectionManager {
     // Animal ticking — called once per second (every 20 game ticks)
     // -------------------------------------------------------------------------
 
+    /**
+     * Advances every infected non-player entity in this world by one second.
+     *
+     * Driven off the world's own entity list rather than a tracking set: END_WORLD_TICK
+     * fires once per dimension, so a set shared across worlds would see its members
+     * "missing" on every foreign dimension's pass. This also means state survives chunk
+     * reloads and server restarts for free — an entity resumes ticking as soon as its
+     * chunk is loaded, because being in the world IS the registration.
+     */
     private static void tickAnimals(ServerWorld world) {
-        Iterator<UUID> iter = infectedAnimalUUIDs.iterator();
-        while (iter.hasNext()) {
-            UUID uuid = iter.next();
-            Entity entity = world.getEntity(uuid);
-            if (!(entity instanceof LivingEntity living) || living.isRemoved()) {
-                iter.remove();
-                continue;
-            }
-            if (living instanceof ServerPlayerEntity) {
-                iter.remove();
-                continue;
-            }
+        // Collected first: recoverAnimal can kill an entity, and mutating the entity
+        // list while iterating it is not safe.
+        List<LivingEntity> infected = new ArrayList<>();
+        for (Entity entity : world.iterateEntities()) {
+            if (!(entity instanceof LivingEntity living)) continue;
+            if (living instanceof ServerPlayerEntity || living.isRemoved()) continue;
             InfectionState state = living.getAttached(InfectionAttachments.INFECTION);
-            if (state == null || !state.isInfected()) {
-                iter.remove();
-                continue;
-            }
-            tickAnimal(world, living, state, iter);
+            if (state == null || !state.isInfected()) continue;
+            infected.add(living);
+        }
+
+        for (LivingEntity living : infected) {
+            InfectionState state = living.getAttached(InfectionAttachments.INFECTION);
+            if (state == null || !state.isInfected()) continue;   // may have changed above
+            tickAnimal(world, living, state);
         }
     }
 
-    private static void tickAnimal(ServerWorld world, LivingEntity animal,
-                                   InfectionState state, Iterator<UUID> iter) {
+    private static void tickAnimal(ServerWorld world, LivingEntity animal, InfectionState state) {
         if (state.isExposed()) {
             // Advance incubation by one second (20 ticks) per call
             state.tickIncubation(20);
@@ -149,7 +150,6 @@ public final class InfectionManager {
             state.tickInfection(20);
             if (state.getTicksRemaining() <= 0) {
                 recoverAnimal(world, animal, state);
-                iter.remove();
             }
         }
     }
@@ -296,8 +296,6 @@ public final class InfectionManager {
                 rollSymptoms(player.getServerWorld(), state);
             }
             syncToClient(player, state);
-        } else {
-            infectedAnimalUUIDs.add(entity.getUuid());
         }
     }
 
@@ -448,13 +446,9 @@ public final class InfectionManager {
         List<Disease> hostDiseases = DiseaseRegistry.getDiseasesForHost(living.getType());
         if (hostDiseases.isEmpty()) return;
 
-        // Re-register animals that already have a persisted infection state so their
-        // disease progression resumes after a chunk reload or server restart.
-        InfectionState existing = living.getAttached(InfectionAttachments.INFECTION);
-        if (existing != null) {
-            if (existing.isInfected()) infectedAnimalUUIDs.add(living.getUuid());
-            return;
-        }
+        // Only fresh spawns get a seeding roll. Anything with existing state has already
+        // had one, and resumes ticking on its own now that tickAnimals walks the world.
+        if (living.getAttached(InfectionAttachments.INFECTION) != null) return;
 
         living.getAttachedOrCreate(InfectionAttachments.INFECTION);
         for (Disease disease : hostDiseases) {
