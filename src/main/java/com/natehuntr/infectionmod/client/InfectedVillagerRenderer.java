@@ -10,7 +10,7 @@ import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.util.Identifier;
 
 /**
- * Swaps the villager base texture while they are showing the Scarlet Blight rash.
+ * Swaps the villager base texture while they are showing the Disease B rash.
  *
  * Since 1.21.2 the renderer no longer sees the entity in {@code getTexture} — it only gets
  * a render state. Rather than mixin into the vanilla state class to add a field, this

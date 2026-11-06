@@ -13,7 +13,7 @@ public final class InfectionItems {
     private static final RegistryKey<Item> INFECTED_BEEF_KEY =
             RegistryKey.of(RegistryKeys.ITEM, Identifier.of(InfectionMod.MOD_ID, "infected_beef"));
 
-    // Raw meat from an animal that died of Wasting Curse — food-route transmission vector
+    // Raw meat from an animal that died of Disease C — food-route transmission vector
     public static final Item INFECTED_BEEF = Registry.register(
             Registries.ITEM,
             INFECTED_BEEF_KEY,

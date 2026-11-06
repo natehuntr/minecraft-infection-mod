@@ -21,75 +21,23 @@ Rather than persuading players toward any particular view, the mod asks a system
 
 ## Current Features
 
-### Disease: Crimson Fever
+Three diseases, each parameterised from the epidemiological literature. Names are
+placeholders while the mechanics are being tuned; each models a specific real pathogen.
 
-The mod currently implements one disease with the following properties:
+| | Models | R₀ | Distinguishing mechanic |
+|---|---|---|---|
+| **Disease A** | COVID-like | ≈ 2.5 | Broad reservoir — 13 host species |
+| **Disease B** | Measles-like | ≈ 12 | Contagious for days before any visible sign; air stays infectious after the host leaves |
+| **Disease C** | Prion / CJD-like | ≈ 0.001 | Near-zero airborne spread; transmits through contaminated meat. 95% fatal |
 
-| Property | Value |
-|---|---|
-| Transmission radius | 3 blocks (30% per second), 6 blocks (5% per second) |
-| Direct contact transmission | 60% per second (bounding box overlap) |
-| Duration | 48,000 ticks (~40 minutes / 2 day-night cycles) |
-| Immunity after recovery | 24,000 ticks (~20 minutes / 1 day-night cycle) |
-| Permanent heart loss | 10% on first infection, +10% per re-infection, max 90% |
+Each disease runs through five stages — susceptible, exposed, prodrome, rash, recovered —
+with exposure accumulating along a saturation curve rather than a flat per-second roll, so
+brief contact is low-risk and sustained proximity compounds. Immunity is tracked per
+disease. Animals progress independently of whether a player is watching.
 
-### Reservoir Hosts
-
-The following mob types can carry and spread Crimson Fever:
-
-- **Passive animals:** Bats, Pigs, Cows, Chickens, Sheep, Rabbits
-- **Neutral mobs:** Foxes, Wolves, Cats
-- **Villagers:** Both carriers and recipients
-- **Mounts:** Horses, Donkeys, Mules
-
-Each reservoir host has a **5% chance of spawning already infected**. This rolls once on first entry into the world — mobs loaded from saved chunks are not re-rolled.
-
-### Transmission Mechanics
-
-Spread can occur in all directions:
-
-- **Animal → Player**
-- **Player → Animal**
-- **Animal → Animal**
-- **Player → Villager** (and vice versa)
-
-Eligible targets are any susceptible entity (not already infected or immune) within range.
-
-### Effects on Players
-
-**While infected:**
-- Maximum health reduced by 4 HP (2 hearts) for the duration
-- HUD shows two purple heart outlines where the lost hearts would be
-- Top-centre HUD text: `Infection: Crimson Fever`
-- Countdown timer below: `Clears in: M:SS`
-- 30% chance of symptoms, which do not last the entirety of the disease: Fatigue, nausea, and weakness
-  - Symptoms do not last the entritey of the disease; Will occur for a random amount of time between 3-20 minutes
-  - 1% chance that multiple symptoms will arise
-
-**On recovery:**
-- Temporary health penalty removed
-- Chance of permanent heart loss (one heart, 2 HP) based on re-infection count
-- Permanent losses shown as dark grey heart outlines stacking from the right
-- Immunity granted for 20 minutes — re-infection blocked during this window
-
-Effects persist across logout/login and respawn. Permanent heart loss survives death; active infection is cleared on death.
-
-### Debug Commands
-
-All commands require operator permission (level 2).
-
-| Command | Description |
-|---|---|
-| `/infect [player]` | Infects yourself or a named player with Crimson Fever immediately |
-| `/recover [player]` | Clears an active infection from yourself or a named player |
-| `/infection-status` | Lists all infected, immune, or permanently-damaged entities within 50 blocks |
-
-Example `/infection-status` output:
-```
-Cow: INFECTED (crimson_fever) 342s remaining
-Sheep: IMMUNE 4821s remaining
-Player: perm hearts lost: 2
-```
+**[INFECTION_MOD.md](INFECTION_MOD.md) is the detailed reference** — full parameters,
+transmission maths, stage definitions, commands, and known gaps. It is kept in step with the
+code; this section is deliberately a summary rather than a second copy of those numbers.
 
 ---
 
@@ -101,10 +49,11 @@ Current next planned feature:
 
 Additional future features:
 - Distrbution of vaccines within villages
-- Multiple diseases with distinct transmission vectors (airborne, waterborne, zoonotic), differing severity, virulence, and vaccine compatibility
+- Waterborne transmission, and vaccine compatibility differing by disease
 - Health huts — randomly generated structures containing a Doctor NPC offering vaccination, and treatments for emeralds
 - Mutation system altering transmissibility and immune evasion over time
-- Waning immunity with configurable decay rates per disease
+- Gradual waning of immunity, rather than the current fixed duration followed by full susceptibility
+- Re-tuning the transmission curve against measured R — it currently saturates, so proximity and duration barely discriminate
 
 ---
 
@@ -113,11 +62,12 @@ Additional future features:
 | Component | Detail |
 |---|---|
 | Platform | Fabric Loader 0.19.2 |
-| Fabric API | 0.145.1+26.1 |
+| Fabric API | 0.119.4+1.21.4 |
 | Minecraft | 1.21.4 |
 | Infection state storage | Fabric Data Attachments, persisted to disk via Codec |
-| Client sync | Custom `InfectionSyncPayload` packet sent every second while infected and on state changes |
-| Animal infection state | Tracked in memory; persists across chunk reloads |
+| Client sync | `InfectionSyncPayload` for the player's own state; `VillagerInfectionPayload` for which nearby villagers are visibly diseased |
+| Animal infection state | Driven off each world's entity list, so progression survives chunk reloads and restarts with no tracking state |
+| Instrumentation | `EpidemicLog` records every infection with its source; `/infection-stats` reports observed R, live S/E/I/R, and the case curve |
 
 ---
 

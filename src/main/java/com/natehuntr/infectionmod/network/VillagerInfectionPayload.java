@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Entity IDs of nearby villagers currently showing the Scarlet Blight rash.
+ * Entity IDs of nearby villagers currently showing the Disease B rash.
  *
  * Sent once a second as a full replacement list rather than add/remove deltas: it is a
  * handful of varints, and a self-correcting snapshot cannot drift out of sync if a packet

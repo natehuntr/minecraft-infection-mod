@@ -14,7 +14,7 @@ Notes
 - This replaces the villager BASE skin only. The profession and biome clothing
   overlays are separate feature renderers and still draw on top, so an infected
   farmer still reads as a farmer with a diseased face and hands.
-- It is applied only while a villager is INFECTIOUS with Scarlet Blight.
+- It is applied only while a villager is INFECTIOUS with Disease B.
   Incubating villagers keep the normal skin — they are not contagious yet and
   must not be identifiable on sight.
 - Once this file exists the swap works with no code change; the path is

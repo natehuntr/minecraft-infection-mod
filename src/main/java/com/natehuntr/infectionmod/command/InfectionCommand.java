@@ -26,17 +26,17 @@ public final class InfectionCommand {
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         // Targets are entity selectors, not players: seeding an outbreak needs
-        // /infect @e[type=villager,limit=3] scarlet_blight, and requiring a player meant
+        // /infect @e[type=villager,limit=3] disease_b, and requiring a player meant
         // the only way to test animal disease was editing spawnInfectionChance and rebuilding.
         dispatcher.register(CommandManager.literal("infect")
                 .requires(src -> src.hasPermissionLevel(2))
                 .executes(ctx -> infectEntities(ctx.getSource(),
                         List.of(ctx.getSource().getPlayerOrThrow()),
-                        DiseaseRegistry.CRIMSON_FEVER.id()))
+                        DiseaseRegistry.DISEASE_A.id()))
                 .then(CommandManager.argument("targets", EntityArgumentType.entities())
                         .executes(ctx -> infectEntities(ctx.getSource(),
                                 EntityArgumentType.getEntities(ctx, "targets"),
-                                DiseaseRegistry.CRIMSON_FEVER.id()))
+                                DiseaseRegistry.DISEASE_A.id()))
                         .then(CommandManager.argument("disease", StringArgumentType.word())
                                 .suggests((ctx, builder) -> {
                                     DiseaseRegistry.getAll().forEach(d -> builder.suggest(d.id()));

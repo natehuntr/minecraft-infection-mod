@@ -63,9 +63,9 @@ public final class InfectionManager {
     // SimpleParticleTypes so they need no constructor args and are stable across versions.
     private static ParticleEffect rashParticle(String diseaseId) {
         return switch (diseaseId) {
-            case "scarlet_blight" -> ParticleTypes.CRIMSON_SPORE;   // red speckle — the rash
-            case "crimson_fever"  -> ParticleTypes.SNEEZE;          // respiratory droplets
-            case "wasting_curse"  -> ParticleTypes.ASH;             // grey, wasting away
+            case "disease_b" -> ParticleTypes.CRIMSON_SPORE;   // red speckle — the rash
+            case "disease_a"  -> ParticleTypes.SNEEZE;          // respiratory droplets
+            case "disease_c"  -> ParticleTypes.ASH;             // grey, wasting away
             default               -> ParticleTypes.SNEEZE;
         };
     }
@@ -126,11 +126,11 @@ public final class InfectionManager {
         return state != null && state.isInfectious() && !showsRash(state);
     }
 
-    /** Villager texture swap: Scarlet Blight only, and only once the rash has appeared. */
+    /** Villager texture swap: Disease B only, and only once the rash has appeared. */
     private static boolean villagerShowsRash(LivingEntity e) {
         if (e.getType() != EntityType.VILLAGER) return false;
         InfectionState s = e.getAttached(InfectionAttachments.INFECTION);
-        return s != null && "scarlet_blight".equals(s.getDiseaseId()) && showsRash(s);
+        return s != null && "disease_b".equals(s.getDiseaseId()) && showsRash(s);
     }
 
     // -------------------------------------------------------------------------
@@ -219,11 +219,11 @@ public final class InfectionManager {
     }
 
     /**
-     * Renders the visible sign of infection. Scarlet Blight only — its rash is the one
+     * Renders the visible sign of infection. Disease B only — its rash is the one
      * disease whose real-world signature is something you can see across a room.
      */
     private static void spawnDiseaseParticles(ServerWorld world, LivingEntity entity, String diseaseId) {
-        if (!"scarlet_blight".equals(diseaseId)) return;
+        if (!"disease_b".equals(diseaseId)) return;
         Box box = entity.getBoundingBox();
         double cx = (box.minX + box.maxX) / 2.0;
         double cy = (box.minY + box.maxY) / 2.0;
@@ -234,7 +234,7 @@ public final class InfectionManager {
         world.spawnParticles(rashParticle(diseaseId), cx, cy, cz, 4, sx, sy, sx, 0.0);
 
         // Occasional respiratory puff at head height for the airborne diseases
-        if (!"wasting_curse".equals(diseaseId) && world.getRandom().nextFloat() < 0.2f) {
+        if (!"disease_c".equals(diseaseId) && world.getRandom().nextFloat() < 0.2f) {
             world.spawnParticles(ParticleTypes.SNEEZE, cx, box.maxY - 0.2, cz, 2, 0.1, 0.05, 0.1, 0.02);
         }
     }
@@ -259,7 +259,7 @@ public final class InfectionManager {
     }
 
     private static void dropInfectedMeat(ServerWorld world, LivingEntity animal, String diseaseId) {
-        if (!"wasting_curse".equals(diseaseId)) return;
+        if (!"disease_c".equals(diseaseId)) return;
         if (animal.getType() != EntityType.COW && animal.getType() != EntityType.MOOSHROOM) return;
         ItemStack stack = new ItemStack(InfectionItems.INFECTED_BEEF);
         ItemEntity drop = new ItemEntity(world, animal.getX(), animal.getY() + 0.5, animal.getZ(), stack);

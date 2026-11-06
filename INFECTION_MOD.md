@@ -10,11 +10,21 @@ players, animals, and villagers.
 Three diseases modelled on real-world pathogens, parameterised from the epidemiological
 literature (R₀, CFR, incubation period, transmission curve).
 
-### 1. Crimson Fever *(COVID-like, R₀ ≈ 2.5)*
+Names are deliberately neutral placeholders while the mechanics are tuned, so they carry no
+thematic implication. Each still models a specific pathogen, and the parameters only make
+sense read against it:
+
+| | Models | Previously |
+|---|---|---|
+| Disease A | COVID-like | Crimson Fever |
+| Disease B | Measles-like | Scarlet Blight |
+| Disease C | Prion / CJD-like | Wasting Curse |
+
+### 1. Disease A *(COVID-like, R₀ ≈ 2.5)*
 
 | Property | Value |
 |---|---|
-| Disease ID | `crimson_fever` |
+| Disease ID | `disease_a` |
 | Transmission curve | P(t) = 80% × (1 − e^−ᵗ⁄τ), τ = 60 s |
 | Incubation period | 72,000 ticks (3 MC days) |
 | Infectious duration | 120,000 ticks (5 MC days) |
@@ -25,11 +35,11 @@ literature (R₀, CFR, incubation period, transmission curve).
 | Spawn infection chance | 5% per eligible mob |
 | Reservoir hosts | Bats, Pigs, Cows, Chickens, Sheep, Foxes, Wolves, Cats, Villagers, Horses, Donkeys, Mules, Rabbits |
 
-### 2. Scarlet Blight *(Measles-like, R₀ ≈ 12)*
+### 2. Disease B *(Measles-like, R₀ ≈ 12)*
 
 | Property | Value |
 |---|---|
-| Disease ID | `scarlet_blight` |
+| Disease ID | `disease_b` |
 | Transmission curve | P(t) = 99% × (1 − e^−ᵗ⁄τ), τ = 20 s |
 | Incubation period | 120,000 ticks (5 MC days) |
 | Infectious duration | 168,000 ticks (7 MC days) |
@@ -40,11 +50,11 @@ literature (R₀, CFR, incubation period, transmission curve).
 | Spawn infection chance | 5% per villager |
 | Reservoir hosts | Villagers only (human-specific disease) |
 
-### 3. Wasting Curse *(Prion/CJD-like, R₀ ≈ 0.001)*
+### 3. Disease C *(Prion/CJD-like, R₀ ≈ 0.001)*
 
 | Property | Value |
 |---|---|
-| Disease ID | `wasting_curse` |
+| Disease ID | `disease_c` |
 | Transmission (airborne) | Flat 0.1% per second (τ = 0 disables the curve) |
 | Incubation period | 120,000 ticks (5 MC days) |
 | Infectious duration | 240,000 ticks (10 MC days) |
@@ -70,13 +80,13 @@ literature (R₀, CFR, incubation period, transmission curve).
    a fatal outcome kills, survival may cost a permanent heart.
 
 The prodrome is the point: **being contagious and looking contagious are different things.**
-A villager spreads Scarlet Blight for 3.5 MC days before anything shows, so an outbreak is
+A villager spreads Disease B for 3.5 MC days before anything shows, so an outbreak is
 already well underway by the time the first rash appears. `/infection-status` distinguishes
 `PRODROMAL` from `INFECTIOUS`; nothing in-world does.
 
-Immunity is tracked **per disease**. Recovering from Scarlet Blight grants no protection
-against Crimson Fever or Wasting Curse. A fatal case names the disease in the death message
-("Steve succumbed to Scarlet Blight") rather than a bare "Steve died".
+Immunity is tracked **per disease**. Recovering from Disease B grants no protection
+against Disease A or Disease C. A fatal case names the disease in the death message
+("Steve succumbed to Disease B") rather than a bare "Steve died".
 
 ---
 
@@ -108,7 +118,7 @@ Proximity modifies the **accumulation rate**, not τ:
 Exposure decays at **2 s/s** once entities leave range, so brief separations matter less
 than sustained ones. A pair that successfully transmits has its counter cleared.
 
-**Wasting Curse** uses a flat model (τ = 0): probability is `maxP × rate` per second,
+**Disease C** uses a flat model (τ = 0): probability is `maxP × rate` per second,
 independent of exposure duration. Its real vector is food, not air.
 
 ### Aerosol persistence
@@ -124,7 +134,7 @@ it settles. Aerosol exposure runs through the same saturation curve, keyed per
 (disease, target) rather than (source, target) — the host may be long gone, or dead. Their
 UUID rides along on the cloud only so the case can still be attributed in the epidemic log.
 
-Scarlet Blight's 120 s comes from measles staying airborne roughly two real hours, which is
+Disease B's 120 s comes from measles staying airborne roughly two real hours, which is
 about 100 s once compressed into Minecraft's 20-minute day.
 
 Eligible targets are players (any disease) and that disease's reservoir hosts. Spread is
@@ -135,7 +145,7 @@ bidirectional: player→animal, animal→player, animal→animal.
 ## Reservoir Hosts & Spawn Infection
 
 When a mob first enters the world (fresh spawn only, not chunk reload) it gets a per-disease
-roll to spawn already infected: 5% for Crimson Fever and Scarlet Blight, 1% for Wasting
+roll to spawn already infected: 5% for Disease A and Disease B, 1% for Wasting
 Curse. If a mob hosts several diseases, the first successful roll wins.
 
 **Newborns are never seeded.** Babies start susceptible, so breeding restores susceptibles to
@@ -150,11 +160,11 @@ again.
 Infected animals progress incubation → infectious → recovery or death, ticked once per
 second from each world's own entity list.
 
-- **Wasting Curse (95% CFR)** — when a cow's illness ends the CFR roll usually kills it,
+- **Disease C (95% CFR)** — when a cow's illness ends the CFR roll usually kills it,
   dropping **Infected Beef** alongside normal loot. Killing a cow that is *already
   infectious* also drops Infected Beef, so the food route is reachable in ordinary play
   rather than requiring the full 15-day course to run uninterrupted.
-- **Crimson Fever / Scarlet Blight** — low CFR; animals usually recover and gain immunity.
+- **Disease A / Disease B** — low CFR; animals usually recover and gain immunity.
 
 ---
 
@@ -166,7 +176,7 @@ On **recovery**:
 - CFR roll — a fatal outcome kills the player
 - Survivors risk **permanent heart loss** (1 heart). 10% on the first infection, +10% each
   subsequent one, capped at 90%
-- Immunity is granted against that disease only (Wasting Curse grants none)
+- Immunity is granted against that disease only (Disease C grants none)
 
 Permanent losses show as dark grey heart outlines stacking from the right, and persist
 through death and logout.
@@ -175,8 +185,8 @@ through death and logout.
 
 ## Seeing Infection
 
-Visible signs are **Scarlet Blight only** — its rash is the one disease whose real-world
-signature is visible across a room. Crimson Fever and Wasting Curse are invisible and must
+Visible signs are **Disease B only** — its rash is the one disease whose real-world
+signature is visible across a room. Disease A and Disease C are invisible and must
 be found with `/infection-status` or inferred from their effects.
 
 - **Particles** — crimson spores across the body, plus an occasional sneeze at head height
@@ -216,18 +226,18 @@ All commands require operator permission (level 2).
 
 | Command | Description |
 |---|---|
-| `/infect [targets] [disease]` | Infects any entity selector — e.g. `/infect @e[type=villager,limit=3] scarlet_blight`. Defaults to you with `crimson_fever`. |
+| `/infect [targets] [disease]` | Infects any entity selector — e.g. `/infect @e[type=villager,limit=3] disease_b`. Defaults to you with `disease_a`. |
 | `/recover [targets]` | Clears active infections from any entity selector |
 | `/infection-status` | Lists infected, immune, or permanently-damaged entities within 50 blocks |
 | `/infection-stats [disease]` | Epidemic report: cases, observed R, outcomes, live S/E/I/R, case curve |
 | `/infection-stats reset` | Clears the epidemic log |
 
-Disease IDs: `crimson_fever`, `scarlet_blight`, `wasting_curse`
+Disease IDs: `disease_a`, `disease_b`, `disease_c`
 
 ```
-Cow: EXPOSED (wasting_curse) infectious in 85420s
-Villager: INFECTIOUS (scarlet_blight) 12340s remaining
-Sheep: IMMUNE crimson_fever 4821s
+Cow: EXPOSED (disease_c) infectious in 85420s
+Villager: INFECTIOUS (disease_b) 12340s remaining
+Sheep: IMMUNE disease_a 4821s
 Player: perm hearts lost: 2
 ```
 
@@ -253,7 +263,7 @@ Player: perm hearts lost: 2
 ### Known gaps
 
 - Transmission is saturated: at close range ~84 seconds of contact is already a 97.5%
-  infection chance for Scarlet Blight, so proximity and duration barely discriminate and
+  infection chance for Disease B, so proximity and duration barely discriminate and
   quarantine is close to a no-op. Needs re-tuning against measured R.
 - Immunity is all-or-nothing per disease; no partial or waning protection.
 - Aerosol is tracked per block with a hard cap of 20,000 blocks per dimension. A very large
