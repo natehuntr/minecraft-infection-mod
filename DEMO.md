@@ -4,11 +4,14 @@ This branch (`demo/fast-timings`) is the development code with disease timings c
 so that a full infection cycle fits into a live presentation. **Do not merge it back** —
 the only differences are the timing numbers in `DiseaseRegistry.java` and this file.
 
-| | Incubation | Contagious, no visible sign | Visible | Afterwards |
+| | Incubation | `PRODROMAL` (contagious, no sign yet) | `INFECTIOUS` | Afterwards |
 |---|---|---|---|---|
 | Disease A | 10 s | 20 s | 40 s | Immune for 2 min |
-| Disease B | 10 s | 30 s | 30 s (rash, villager texture change) | Immune effectively for good |
+| Disease B | 10 s | 30 s | 30 s — rash: villager texture change, crimson spores | Immune effectively for good |
 | Disease C | 10 s | — | 60 s | 95% die; no immunity |
+
+Only Disease B is visible on mobs. For A and C the stage change shows in
+`/infection-status` and, when a player is the patient, on the HUD.
 
 Transmission curves and aerosol lifetimes are unchanged, so spread *per second of contact*
 behaves exactly as in the real build — only the length of each stage is shorter.
@@ -38,9 +41,9 @@ counts rather than the curve.
 ```
 
 1. **Invisible spread (0:00–0:40).** Run `/infection-status` every ~10 s. The index case goes
-   `EXPOSED` → `INFECTIOUS` while looking completely normal, and neighbours start appearing
+   `EXPOSED` → `PRODROMAL` while looking completely normal, and neighbours start appearing
    as `EXPOSED`. Talking point: Disease B is contagious before anyone can see it.
-2. **The rash (0:40–1:10).** The index villager's texture changes and crimson spores appear.
+2. **The rash (0:40–1:10).** It flips to `INFECTIOUS`: the texture changes and crimson spores appear.
    By now the people it infected are already incubating.
 3. **The numbers.** `/infection-stats disease_b` — cases, observed R, live S/E/I/R.
 4. **Air stays infectious.** Infect a villager in an enclosed room, kill it, then stand
