@@ -153,6 +153,13 @@ a village rather than manufacturing new index cases — which matters because bi
 only mechanism by which a village that has burnt through an outbreak becomes vulnerable
 again.
 
+**Villages are denser than vanilla.** The mod overrides
+`data/minecraft/worldgen/structure_set/villages.json`, cutting village spacing from 34 to
+16 chunks (separation 8 → 6), roughly 4.5× as many villages. More villages means more
+separate villager populations for Disease B to move between. This only affects chunks
+generated after the mod is installed, so existing worlds keep their old layout until you
+explore new terrain.
+
 ---
 
 ## Animal Disease Progression
