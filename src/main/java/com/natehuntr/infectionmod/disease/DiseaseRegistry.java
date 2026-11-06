@@ -4,6 +4,10 @@ import com.natehuntr.infectionmod.InfectionMod;
 import net.minecraft.entity.EntityType;
 import java.util.*;
 
+// DEMO BUILD — timings compressed for live presentation. Do not merge into development.
+// Every disease: 10s incubation, 60s infectious. Disease A: 20s presymptomatic, immunity 2 min.
+// Disease B: 30s prodrome then 30s rash (immunity unchanged, effectively lifelong).
+// Disease C: 60s to outcome (95% fatal). Real timings live on the development branch.
 public final class DiseaseRegistry {
     private static final Map<String, Disease> REGISTRY = new LinkedHashMap<>();
     private static final Map<String, Set<EntityType<?>>> RESERVOIR_HOST_MAP = new LinkedHashMap<>();
@@ -11,7 +15,7 @@ public final class DiseaseRegistry {
     // R₀ 2.5 — COVID-like; τ=60s, max 80% cumulative; broad reservoir; 5% spawn.
     // Prodrome 1 MC day (presymptomatic spread); aerosol lingers 30s.
     public static final Disease DISEASE_A = register(
-            new Disease("disease_a", "Disease A", 0.80f, 0.05f, 72000, 120000, 24000, 0.01f, 72000, 60, 30),
+            new Disease("disease_a", "Disease A", 0.80f, 0.05f, 200, 1200, 400, 0.01f, 2400, 60, 30),
             Set.of(EntityType.BAT, EntityType.PIG, EntityType.COW, EntityType.CHICKEN,
                    EntityType.SHEEP, EntityType.FOX, EntityType.WOLF, EntityType.CAT,
                    EntityType.VILLAGER, EntityType.HORSE, EntityType.DONKEY, EntityType.MULE,
@@ -23,14 +27,14 @@ public final class DiseaseRegistry {
     // infectious window. Aerosol lingers 120s: measles stays airborne ~2 real hours,
     // which is ~100s once compressed to Minecraft's 20-minute day.
     public static final Disease DISEASE_B = register(
-            new Disease("disease_b", "Disease B", 0.99f, 0.05f, 120000, 168000, 84000, 0.002f, 2400000, 20, 120),
+            new Disease("disease_b", "Disease B", 0.99f, 0.05f, 200, 1200, 600, 0.002f, 2400000, 20, 120),
             Set.of(EntityType.VILLAGER)
     );
 
     // Prion/CJD-like; flat 0.1%/sec (τ=0 disables curve); cattle only; 95% CFR; 1% spawn.
     // No prodrome and no aerosol — prions do not transmit through air at all.
     public static final Disease DISEASE_C = register(
-            new Disease("disease_c", "Disease C", 0.001f, 0.01f, 120000, 240000, 0, 0.95f, 0, 0, 0),
+            new Disease("disease_c", "Disease C", 0.001f, 0.01f, 200, 1200, 0, 0.95f, 0, 0, 0),
             Set.of(EntityType.COW)
     );
 
