@@ -33,7 +33,7 @@ sense read against it:
 | Case fatality rate | 1% |
 | Immunity after recovery | 72,000 ticks (3 MC days) — waning |
 | Spawn infection chance | 5% per eligible mob |
-| Reservoir hosts | Bats, Pigs, Cows, Chickens, Sheep, Foxes, Wolves, Cats, Villagers, Horses, Donkeys, Mules, Rabbits |
+| Reservoir hosts | Bats, Pigs, Cows, Chickens, Sheep, Foxes, Wolves, Cats, Villagers, Wandering Traders, Horses, Donkeys, Mules, Rabbits |
 
 ### 2. Disease B *(Measles-like, R₀ ≈ 12)*
 
@@ -47,8 +47,8 @@ sense read against it:
 | Aerosol lifetime | 120 s |
 | Case fatality rate | 0.2% |
 | Immunity after recovery | 2,400,000 ticks (100 MC days) — near-lifelong |
-| Spawn infection chance | 5% per villager |
-| Reservoir hosts | Villagers only (human-specific disease) |
+| Spawn infection chance | 5% per villager or wandering trader |
+| Reservoir hosts | Villagers and Wandering Traders (human-specific disease) |
 
 ### 3. Disease C *(Prion/CJD-like, R₀ ≈ 0.001)*
 
@@ -159,6 +159,11 @@ again.
 separate villager populations for Disease B to move between. This only affects chunks
 generated after the mod is installed, so existing worlds keep their old layout until you
 explore new terrain.
+
+**Wandering traders carry Disease A and Disease B.** They are the only human host that
+moves between villages on its own, so an infected trader can seed an outbreak in a village
+that never had contact with the original one. They show Disease B's crimson-spore particles
+when the rash appears, but keep their normal texture — the texture swap is villager-only.
 
 ---
 

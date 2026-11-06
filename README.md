@@ -26,7 +26,7 @@ placeholders while the mechanics are being tuned; each models a specific real pa
 
 | | Models | R₀ | Distinguishing mechanic |
 |---|---|---|---|
-| **Disease A** | COVID-like | ≈ 2.5 | Broad reservoir — 13 host species |
+| **Disease A** | COVID-like | ≈ 2.5 | Broad reservoir — 14 host species |
 | **Disease B** | Measles-like | ≈ 12 | Contagious for days before any visible sign; air stays infectious after the host leaves |
 | **Disease C** | Prion / CJD-like | ≈ 0.001 | Near-zero airborne spread; transmits through contaminated meat. 95% fatal |
 

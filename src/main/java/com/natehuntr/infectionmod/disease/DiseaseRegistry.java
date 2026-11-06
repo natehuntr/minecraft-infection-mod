@@ -15,16 +15,16 @@ public final class DiseaseRegistry {
             Set.of(EntityType.BAT, EntityType.PIG, EntityType.COW, EntityType.CHICKEN,
                    EntityType.SHEEP, EntityType.FOX, EntityType.WOLF, EntityType.CAT,
                    EntityType.VILLAGER, EntityType.HORSE, EntityType.DONKEY, EntityType.MULE,
-                   EntityType.RABBIT)
+                   EntityType.RABBIT, EntityType.WANDERING_TRADER)
     );
 
-    // R₀ 12 — Measles-like; τ=20s, max 99% cumulative; villagers only; 5% spawn.
+    // R₀ 12 — Measles-like; τ=20s, max 99% cumulative; villagers and wandering traders; 5% spawn.
     // Contagious 4 days before the rash and ~4 after, so prodrome is half the 7-day
     // infectious window. Aerosol lingers 120s: measles stays airborne ~2 real hours,
     // which is ~100s once compressed to Minecraft's 20-minute day.
     public static final Disease DISEASE_B = register(
             new Disease("disease_b", "Disease B", 0.99f, 0.05f, 120000, 168000, 84000, 0.002f, 2400000, 20, 120),
-            Set.of(EntityType.VILLAGER)
+            Set.of(EntityType.VILLAGER, EntityType.WANDERING_TRADER)
     );
 
     // Prion/CJD-like; flat 0.1%/sec (τ=0 disables curve); cattle only; 95% CFR; 1% spawn.
