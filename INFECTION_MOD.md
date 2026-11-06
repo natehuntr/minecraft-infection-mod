@@ -145,8 +145,8 @@ bidirectional: player→animal, animal→player, animal→animal.
 ## Reservoir Hosts & Spawn Infection
 
 When a mob first enters the world (fresh spawn only, not chunk reload) it gets a per-disease
-roll to spawn already infected: 5% for Disease A and Disease B, 1% for Wasting
-Curse. If a mob hosts several diseases, the first successful roll wins.
+roll to spawn already infected: 5% for Disease A and Disease B, 1% for Disease
+C. If a mob hosts several diseases, the first successful roll wins.
 
 **Newborns are never seeded.** Babies start susceptible, so breeding restores susceptibles to
 a village rather than manufacturing new index cases — which matters because births are the
