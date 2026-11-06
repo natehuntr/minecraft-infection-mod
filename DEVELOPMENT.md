@@ -26,10 +26,11 @@ bootstrap and **no cloud session can compile or run the mod**. Anything written 
 unverified until built locally. Two consequences:
 
 - Build and test on a local machine, not in a cloud session.
-- Cloud sessions also cannot push to GitHub (403 on writes), so changes come back as a
-  `git bundle`: `git fetch <bundle> <branch>` then `git checkout -B <branch> FETCH_HEAD`.
-  Note that `checkout -B` discards uncommitted local changes to tracked files — commit or
-  stash local test tweaks first.
+- Pushing from cloud sessions depends on the session's GitHub access. Some can push their
+  branch directly; when one cannot (403 on writes), changes come back as a `git bundle`:
+  `git fetch <bundle> <branch>` then `git checkout -B <branch> FETCH_HEAD`. Note that
+  `checkout -B` discards uncommitted local changes to tracked files — commit or stash
+  local test tweaks first.
 
 ### Checking API signatures without compiling
 

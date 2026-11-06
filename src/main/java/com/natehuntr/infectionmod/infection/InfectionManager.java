@@ -48,8 +48,8 @@ public final class InfectionManager {
             Identifier.of(InfectionMod.MOD_ID, "infection_health_penalty");
 
     /**
-     * Damage source naming the disease, so a fatality reads "Steve succumbed to Scarlet
-     * Blight" rather than a bare "Steve died". Each disease has a damage_type JSON under
+     * Damage source naming the disease, so a fatality reads "Steve succumbed to Disease
+     * C" rather than a bare "Steve died". Each disease has a damage_type JSON under
      * data/infection_mod/damage_type/ whose message_id resolves the lang key.
      */
     private static DamageSource diseaseDamage(ServerWorld world, String diseaseId) {
