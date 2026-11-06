@@ -260,6 +260,9 @@ Player: perm hearts lost: 2
   overrides `createRenderState()` covariantly to supply an extended state carrying one extra
   flag; `updateRenderState` still receives the entity and sets it.
 
+See [DEVELOPMENT.md](DEVELOPMENT.md) for build and test instructions, the reasoning behind
+these choices, and the bugs already fixed once.
+
 ### Known gaps
 
 - Transmission is saturated: at close range ~84 seconds of contact is already a 97.5%

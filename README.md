@@ -39,6 +39,9 @@ disease. Animals progress independently of whether a player is watching.
 transmission maths, stage definitions, commands, and known gaps. It is kept in step with the
 code; this section is deliberately a summary rather than a second copy of those numbers.
 
+**[DEVELOPMENT.md](DEVELOPMENT.md)** covers building, testing recipes, and the pitfalls
+worth knowing before changing the simulation.
+
 ---
 
 ## Planned Features
